@@ -30,7 +30,7 @@
 
   <!-- NuGet packages (replaces packages.config + HintPath references) -->
   <ItemGroup>
-    <PackageReference Include="NReco.PdfGenerator.LT" Version="1.2.1" />
+    <PackageReference Include="HtmlRenderer.PdfSharp" Version="1.5.2" />
     <PackageReference Include="QRCoder" Version="1.7.0" />
   </ItemGroup>
 

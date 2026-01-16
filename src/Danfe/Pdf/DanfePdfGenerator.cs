@@ -1,20 +1,24 @@
-using NReco.PdfGenerator;
+using System;
+using System.IO;
+using PdfSharp;
+using PdfSharp.Pdf;
+using TheArtOfDev.HtmlRenderer.PdfSharp;
 
 namespace Direction.NFSe.Danfe;
 
-public sealed class DanfePdfGenerator
+public static class DanfePdfGenerator
 {
-    private readonly HtmlToPdfConverter _converter;
-
-    public DanfePdfGenerator(HtmlToPdfConverter? converter = null)
+    public static byte[] Generate(string html)
     {
-        _converter = converter ?? new HtmlToPdfConverter
+        Byte[] res = null;
+        using (MemoryStream ms = new MemoryStream())
         {
-            Size = PageSize.A4,
-            Orientation = PageOrientation.Portrait,
-            Margins = new PageMargins { Top = 1, Bottom = 0, Left = 0, Right = 0 }
-        };
-    }
+            PdfDocument pdf = PdfGenerator.GeneratePdf(html, PageSize.A4);
 
-    public byte[] Generate(string html) => _converter.GeneratePdf(html);
+            pdf.Save(ms);
+            res = ms.ToArray();
+        }
+
+        return res;
+    }
 }
