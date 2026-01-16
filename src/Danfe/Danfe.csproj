@@ -30,7 +30,7 @@
 
   <!-- NuGet packages (replaces packages.config + HintPath references) -->
   <ItemGroup>
-    <PackageReference Include="NReco.PdfGenerator" Version="1.2.1" />
+    <PackageReference Include="NReco.PdfGenerator.LT" Version="1.2.1" />
     <PackageReference Include="QRCoder" Version="1.7.0" />
   </ItemGroup>
 
@@ -58,21 +58,15 @@
 
 <ItemGroup>
     <!-- Para projetos SDK/PackageReference -->
-    <None Include="buildTransitive\Direction.NFSe.Danfe.targets"
-            Pack="true"
-            PackagePath="buildTransitive\Direction.NFSe.Danfe.targets" />
+    <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="buildTransitive\Direction.NFSe.Danfe.targets" />
 
     <!-- Para projetos .NET Framework clássicos (non-SDK) -->
-    <None Include="buildTransitive\Direction.NFSe.Danfe.targets"
-            Pack="true"
-            PackagePath="build\Direction.NFSe.Danfe.targets" />
+    <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="build\Direction.NFSe.Danfe.targets" />
 </ItemGroup>
 
 
     <ItemGroup>
-  <None Include="Assets\**\*"
-        Pack="true"
-        PackagePath="contentFiles\any\any\Direction.NFSe.Danfe\Assets\">
+  <None Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Direction.NFSe.Danfe\Assets\">
     <PackageCopyToOutput>true</PackageCopyToOutput>
   </None>
 </ItemGroup>
