@@ -1,36 +1,73 @@
 using System;
-using System.IO;
-using System.Reflection.Metadata;
-using HtmlRendererCore.PdfSharp;
-using PdfSharpCore;
-using PdfSharpCore.Pdf;
+using DinkToPdf;
+using DinkToPdf.Contracts;
 namespace Direction.NFSe.Danfe;
 
 public static class DanfePdfGenerator
 {
+    private static readonly IConverter _converter = new SynchronizedConverter(new PdfTools());
+
     public static byte[] Generate(string html)
     {
-        Byte[] res = null;
-        PdfDocument pdf = new PdfDocument();
-        var config = new PdfGenerateConfig
+        try
         {
-            PageSize = PageSize.A4,
-            MarginTop = 2,
-            MarginBottom = 2,
-            MarginLeft = 2,
-            MarginRight = 2
-        };
+            var doc = new HtmlToPdfDocument()
+            {
+                GlobalSettings = {
+                    ColorMode = ColorMode.Color,
+                    Orientation = Orientation.Portrait,
+                    PaperSize = PaperKind.A4,
+                    Margins = new MarginSettings { Top = 2, Bottom = 2, Left = 2, Right = 2 },
+                    DPI = 300
+                },
+                Objects = {
+                    new ObjectSettings() {
+                        PagesCount = true,
+                        HtmlContent = html,
+                        WebSettings = {
+                            DefaultEncoding = "utf-8",
+                            EnableIntelligentShrinking = false
+                        },
+                    }
+                }
+            };
 
-        PdfGenerator.AddPdfPages(
-            pdf,
-            html,
-            config
-        );
+            return _converter.Convert(doc);
 
-        using MemoryStream ms = new MemoryStream();
-        pdf.Save(ms);
-        res = ms.ToArray();
+            //Byte[] res = null;
+            //PdfDocument pdf = new PdfDocument();
+            //var config = new PdfGenerateConfig
+            //{
+            //    PageSize = PageSize.A4,
+            //    MarginTop = 2,
+            //    MarginBottom = 2,
+            //    MarginLeft = 2,
+            //    MarginRight = 2
+            //};
 
-        return res;
+            //PdfGenerator.AddPdfPages(
+            //    pdf,
+            //    html,
+            //    config
+            //);
+
+            //using MemoryStream ms = new MemoryStream();
+            //pdf.Save(ms);
+            //res = ms.ToArray();
+
+            //return res;
+
+        }
+        catch (TypeInitializationException ex)
+        {
+            Console.WriteLine($"ERRO NO TIPO: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                // ESSA é a mensagem que importa
+                Console.WriteLine($"ERRO REAL (INNER): {ex.InnerException.Message}");
+                Console.WriteLine($"STACK TRACE: {ex.InnerException.StackTrace}");
+            }
+            throw;
+        }
     }
 }

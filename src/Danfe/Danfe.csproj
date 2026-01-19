@@ -1,83 +1,79 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup>
-    <!-- Multi-target so the same package can be used by legacy .NET Framework 4.8 and .NET (Core) apps -->
-    <TargetFramework>net6.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>false</ImplicitUsings>
+    <PropertyGroup>
+        <!-- Multi-target so the same package can be used by legacy .NET Framework 4.8 and .NET (Core) apps -->
+        <TargetFramework>net6.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>false</ImplicitUsings>
 
-    <AssemblyName>Direction.NFSe.Danfe</AssemblyName>
-    <RootNamespace>Direction.NFSe.Danfe</RootNamespace>
+        <AssemblyName>Direction.NFSe.Danfe</AssemblyName>
+        <RootNamespace>Direction.NFSe.Danfe</RootNamespace>
 
-    <!-- Matches your current output type -->
-    <OutputType>Library</OutputType>  
+        <!-- Matches your current output type -->
+        <OutputType>Library</OutputType>
 
-    <PackageId>Direction.NFSe.Danfe</PackageId>
-    <Authors>Direction Systems Ltda.; Jairo Marques</Authors>
-    <Company>Direction Systems Ltda.</Company>
-    <Copyright>Copyright © Direction Systems Ltda. 2026</Copyright>
-    <Description>Biblioteca .NET para gerar DANFSe (PDF) a partir do XML da Nota Fiscal de Serviço Nacional (NFSe/DPS), sem depender de endpoint externo.</Description>
-    <RepositoryUrl>https://github.com/JairoMarques/direction-nfse-danfe</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>nfse danfe pdf nota fiscal nacional brasil</PackageTags>    
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-</PropertyGroup>
+        <PackageId>Direction.NFSe.Danfe.Local</PackageId>
+        <Version>1.0.1</Version>
+        <Authors>Direction Systems Ltda.; Jairo Marques</Authors>
+        <Company>Direction Systems Ltda.</Company>
+        <Copyright>Copyright © Direction Systems Ltda. 2026</Copyright>
+        <Description>Biblioteca .NET para gerar DANFSe (PDF) a partir do XML da Nota Fiscal de Serviço Nacional (NFSe/DPS), sem depender de endpoint externo.</Description>
+        <RepositoryUrl>https://github.com/JairoMarques/direction-nfse-danfe</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageTags>nfse danfe pdf nota fiscal nacional brasil</PackageTags>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    </PropertyGroup>
 
-  <!-- NuGet packages (replaces packages.config + HintPath references) -->
-  <ItemGroup>
-    <PackageReference Include="HtmlRendererCore.PdfSharp" Version="1.0.5" />
-    <PackageReference Include="PdfSharpCore" Version="1.3.67" />
-    <PackageReference Include="QRCoder" Version="1.7.0" />
-  </ItemGroup>
+    <!-- NuGet packages (replaces packages.config + HintPath references) -->
+    <ItemGroup>
+        <PackageReference Include="DinkToPdf" Version="1.0.8" />
+        <PackageReference Include="System.Drawing.Common" Version="6.0.0" />
+        <PackageReference Include="HtmlRendererCore.PdfSharp" Version="1.0.5" />
+        <PackageReference Include="PdfSharpCore" Version="1.3.67" />
+        <PackageReference Include="QRCoder" Version="1.7.0" />
+    </ItemGroup>
 
-  <!-- net48-only framework references that do NOT exist on .NET Standard -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="WindowsBase" />
-    <Reference Include="System.Web" />
-    <Reference Include="System.Drawing" />
-  </ItemGroup>
+    <!-- net48-only framework references that do NOT exist on .NET Standard -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+        <Reference Include="PresentationCore" />
+        <Reference Include="PresentationFramework" />
+        <Reference Include="WindowsBase" />
+        <Reference Include="System.Web" />
+        <Reference Include="System.Drawing" />
+    </ItemGroup>
 
-  <!-- If you use System.Drawing APIs when targeting netstandard2.0, you typically need this package.
+    <!-- If you use System.Drawing APIs when targeting netstandard2.0, you typically need this package.
        If you don't use System.Drawing in netstandard builds, remove this line. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">  </ItemGroup>
-    
-
-<ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="" />
-    <None Include="..\..\CONTRIBUTING.md" Pack="true" PackagePath="" />
-    <None Include="..\..\CODE_OF_CONDUCT.md" Pack="true" PackagePath="" />
-    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
-</ItemGroup>
-
-
-<ItemGroup>
-    <!-- Para projetos SDK/PackageReference -->
-    <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="buildTransitive\Direction.NFSe.Danfe.targets" />
-
-    <!-- Para projetos .NET Framework clássicos (non-SDK) -->
-    <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="build\Direction.NFSe.Danfe.targets" />
-</ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">  </ItemGroup>
 
 
     <ItemGroup>
-  <None Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Direction.NFSe.Danfe\Assets\">
-    <PackageCopyToOutput>true</PackageCopyToOutput>
-  </None>
-</ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="" />
+        <None Include="..\..\CONTRIBUTING.md" Pack="true" PackagePath="" />
+        <None Include="..\..\CODE_OF_CONDUCT.md" Pack="true" PackagePath="" />
+        <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+    </ItemGroup>
 
 
-<ItemGroup>
-    <!-- Para dev local (ProjectReference): copia Assets para bin -->
-    <Content Include="Assets\**\*">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Visible>false</Visible>
-    </Content>
-</ItemGroup>
+    <ItemGroup>
+        <!-- Para projetos SDK/PackageReference -->
+        <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="buildTransitive\Direction.NFSe.Danfe.targets" />
+
+        <!-- Para projetos .NET Framework clássicos (non-SDK) -->
+        <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="build\Direction.NFSe.Danfe.targets" />
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <Content Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Direction.NFSe.Danfe\Assets">
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
 </Project>
