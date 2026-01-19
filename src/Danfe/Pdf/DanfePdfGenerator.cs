@@ -1,9 +1,9 @@
 using System;
 using System.IO;
-using PdfSharp;
-using PdfSharp.Pdf;
-using TheArtOfDev.HtmlRenderer.PdfSharp;
-
+using System.Reflection.Metadata;
+using HtmlRendererCore.PdfSharp;
+using PdfSharpCore;
+using PdfSharpCore.Pdf;
 namespace Direction.NFSe.Danfe;
 
 public static class DanfePdfGenerator
@@ -11,13 +11,25 @@ public static class DanfePdfGenerator
     public static byte[] Generate(string html)
     {
         Byte[] res = null;
-        using (MemoryStream ms = new MemoryStream())
+        PdfDocument pdf = new PdfDocument();
+        var config = new PdfGenerateConfig
         {
-            PdfDocument pdf = PdfGenerator.GeneratePdf(html, PageSize.A4);
+            PageSize = PageSize.A4,
+            MarginTop = 2,
+            MarginBottom = 2,
+            MarginLeft = 2,
+            MarginRight = 2
+        };
 
-            pdf.Save(ms);
-            res = ms.ToArray();
-        }
+        PdfGenerator.AddPdfPages(
+            pdf,
+            html,
+            config
+        );
+
+        using MemoryStream ms = new MemoryStream();
+        pdf.Save(ms);
+        res = ms.ToArray();
 
         return res;
     }

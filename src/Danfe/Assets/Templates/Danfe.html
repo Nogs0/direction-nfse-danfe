@@ -11,21 +11,20 @@
       font-size: {{FONT_SIZE}}
       margin: 0;
       padding: 0;
-      margin: 5px;
-      border: 2px solid #000;
+      border: 1px solid #000;
     "
   >
     <div class="page" style="width: 100%; margin: 0 auto">
       <!--div de CANCELADA -->
       {{NFSE_CANCELADA_DIV}}
       <!-- CABEÇALHO -->
-      <div class="section" style="border-bottom: none; margin-top: 4px; margin-bottom: -10px">
-        <div class="section-content" style="padding: 1px 6px 6px 6px">
+      <div class="section" style="border-bottom: none; margin-top: 2px; margin-bottom: -10px">
+        <div class="section-content" style="padding: 1px 6px 6px 5px">
           <table style="width: 100%; border-collapse: collapse">
             <tr>
               <td style="width: 30%; vertical-align: top">
                 <img
-                  style="padding: 6px 0px 6px 5px; width: auto; height: 40px"
+                  style="padding: 6px 0px 6px 0px; width: auto; height: 25px"
                   alt="Logo"
                   class="nfse-logo"
                   src="data:image/png;base64,{{NFSE_LOGO}}"
@@ -47,7 +46,7 @@
                   <tr>
                     <td style="vertical-align: top">
                       <img
-                        style="width: auto; height: 50px; margin-top: 2px; margin-right: 10px"
+                        style="width: auto; margin-top: 2px; margin-right: 10px"
                         class="prefeitura-logo"
                         src="data:image/png;base64,{{PREFEITURA_LOGO}}"
                       />
@@ -154,7 +153,6 @@
                 style="
                   margin-top: -15px;
                   width: 80px;
-                  height: 80px;
                   margin-left: auto;
                   margin-right: auto;
                   margin-top: -10px;
@@ -164,8 +162,8 @@
                 <img alt="Logo" class="qrcode" src="{{QRCODE_SRC}}" style="width: 100%; height: 100%" />
               </div>
               <div style="font-size: {{FONT_SIZE_QRCODE}} text-align: left">
-                A autenticidade desta NFS-e pode ser verificada pela leitura deste código QR ou pela consulta da chave
-                de acesso no portal nacional da NFS-e
+                Autenticidade pode ser verificada pela leitura deste QR ou pela consulta da chave
+                de acesso no portal nacional.
               </div>
             </td>
           </tr>
@@ -341,7 +339,7 @@
       </div>
       <div style="border-top: 1px solid #000; margin: 0 5px"></div>
       <!-- SERVIÇO -->
-      <div class="section" style="border-bottom: none; height: 310px; max-height: 310px">
+      <div class="section" style="border-bottom: none;>
         <div
           class="section-title"
           style="padding: 4px 6px; font-size: {{FONT_SIZE_HEADER}}; text-transform: uppercase; font-weight: bold"
@@ -694,7 +692,7 @@
       </div>
       <div style="border-top: 1px solid #000; margin: 0 5px"></div>
       <!-- INFORMAÇÕES COMPLEMENTARES -->
-      <div class="section" style="border-bottom: none; height: 110px; max-height: 110px">
+      <div class="section" style="border-bottom: none;>
         <div
           class="section-title"
           style="padding: 4px 6px; font-size: {{FONT_SIZE_HEADER}}; text-transform: uppercase; font-weight: bold"

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup>
     <!-- Multi-target so the same package can be used by legacy .NET Framework 4.8 and .NET (Core) apps -->
-    <TargetFrameworks>net48;netstandard2.0</TargetFrameworks>
+    <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>false</ImplicitUsings>
@@ -30,7 +30,8 @@
 
   <!-- NuGet packages (replaces packages.config + HintPath references) -->
   <ItemGroup>
-    <PackageReference Include="HtmlRenderer.PdfSharp" Version="1.5.2" />
+    <PackageReference Include="HtmlRendererCore.PdfSharp" Version="1.0.5" />
+    <PackageReference Include="PdfSharpCore" Version="1.3.67" />
     <PackageReference Include="QRCoder" Version="1.7.0" />
   </ItemGroup>
 
