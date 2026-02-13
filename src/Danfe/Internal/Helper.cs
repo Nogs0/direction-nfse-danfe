@@ -54,7 +54,7 @@ namespace Direction.NFSe.Danfe
             return encoded.Replace("\r\n", "<br/>").Replace("\n", "<br/>");
         }
 
-        public static string BuildInfComplementares(Servico? serv, NFSeSubstituida? subst)
+        public static string BuildInfComplementares(Servico? serv, NFSeSubstituida? subst, string? outInf)
         {
             if (serv?.cServ == null) return "";
 
@@ -77,6 +77,11 @@ namespace Direction.NFSe.Danfe
             if (serv.cServ.cNBS != 0)
             {
                 sb.Append($"<b>NBS:</b> {serv.cServ.cNBS}");
+            }
+
+            if (!string.IsNullOrEmpty(outInf))
+            {
+                sb.AppendLine(outInf);
             }
 
             return sb.Length == 0 ? "-" : sb.ToString();

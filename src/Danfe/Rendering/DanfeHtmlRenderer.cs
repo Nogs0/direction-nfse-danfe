@@ -134,6 +134,7 @@ public sealed class DanfeHtmlRenderer
         decimal? vPIS = infDps.valores?.trib?.tribFed?.piscofins?.vPis;
         decimal? vCP = infDps.valores?.trib?.tribFed?.vRetCP;
         decimal? vCSLL = infDps.valores?.trib?.tribFed?.vRetCSLL;
+        string? outInf = inf.valores?.xOutInf;
 
         decimal? vTotTribFed = infDps.valores?.trib?.totTrib?.vTotTrib?.vTotTribFed;
         if (vTotTribFed == null || (vTotTribFed.HasValue && vTotTribFed.Value == 0M)) //nem sempre o objeto totalizador é informado no xml
@@ -259,10 +260,10 @@ public sealed class DanfeHtmlRenderer
             ["{{ISS_DESC_INCOND}}"] = DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"),
             ["{{ISS_DEDUCOES}}"] = DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"),
             ["{{ISS_CALCULO}}"] = DanfeFallback.OrCurrency(infDps.valores?.trib?.tribMun?.BM?.vRedBCBM, ptBR, warnings, "vRedBCBM", "infNFSe.valores.trib.tribMun.BM.vRedBCBM"), //TO DO: verificar no futuro se Calculo do BM realmente se refere a esse campo
-            ["{{ISS_BC}}"] = (tpRetIssqn == 2 || opSimpNac == 1) ? vServico.ToString("C", ptBR) : "-",
-            ["{{ISS_ALIQ}}"] = (tpRetIssqn == 2 || opSimpNac == 1) ? DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic") : "-",
+            ["{{ISS_BC}}"] = vServico.ToString("C", ptBR),
+            ["{{ISS_ALIQ}}"] = DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic"),
             ["{{ISS_RETENCAO}}"] = GetDescricaoRetencao(tpRetIssqn),
-            ["{{ISS_APURADO}}"] = (tpRetIssqn == 2 || opSimpNac == 1) ? DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN") : "-",
+            ["{{ISS_APURADO}}"] = DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN"),
 
             // Tributação Federal
             ["{{FED_IRRF}}"] = DanfeFallback.OrCurrency(vIRRF, ptBR, warnings, "vIRRF", "infDps.valores.trib.tribFed.vRetIRRF"),
@@ -289,7 +290,7 @@ public sealed class DanfeHtmlRenderer
             ["{{TOT_MUN}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.totTrib?.pTotTrib?.pTotTribMun.ToString(CultureInfo.InvariantCulture)),
 
             // Inf complementares
-            ["{{INF_COMPLEMENTARES}}"] = Helper.BuildInfComplementares(infDps.serv, infDps.subst)
+            ["{{INF_COMPLEMENTARES}}"] = Helper.BuildInfComplementares(infDps.serv, infDps.subst, outInf)
         };
 
         // Aplica os replaces
