@@ -182,6 +182,9 @@ public sealed class DanfeHtmlRenderer
               </div>"
             : string.Empty;
 
+        if (canceladaDiv == string.Empty)
+            warnings.GenericWarning("CanceladaDiv vazia, status da nota não é cancelada");
+
         string substituidaDiv = (isReplaced && !isCancelled)
             ? @"<div style=""
               position:absolute;
@@ -202,6 +205,9 @@ public sealed class DanfeHtmlRenderer
                           SUBSTITUÍDA
               </div>"
             : string.Empty;
+
+        if (substituidaDiv == string.Empty)
+            warnings.GenericWarning("SubstituidaDiv vazia, status da nota não é substituida");
 
         // Monta mapa de placeholders (agora com warnings)
         var map = new Dictionary<string, string>

@@ -34,4 +34,13 @@ internal sealed class DanfeWarningCollector
             placeholder
         ));
     }
+
+    public void GenericWarning(string message)
+    {
+        _warnings.Add(new DanfeWarning(
+            DanfeWarningCodes.GenericWarning,
+            message,
+            string.Empty
+        ));
+    }
 }
