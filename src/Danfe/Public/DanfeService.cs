@@ -35,6 +35,13 @@ public sealed class DanfeService
         return Generate(nfse, environment, isCancelled);
     }
 
+    public DanfeResult Generate(string xml, DanfeEnvironment environment, bool isCancelled = false, bool isReplaced = false)
+    {
+        using var sr = new StringReader(xml);
+        var nfse = Deserialize(sr);
+        return Generate(nfse, environment, isCancelled, isReplaced);
+    }
+
     public DanfeResult Generate(string xml, DanfeEnvironment environment, DanfeStatus status)
     {
         using var sr = new StringReader(xml);

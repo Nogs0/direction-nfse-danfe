@@ -12,9 +12,9 @@
         <OutputType>Library</OutputType>
 
         <PackageId>Nogueira.NFSe.Danfe.FixLinux</PackageId>
-        <Version>1.0.3</Version>
-        <Authors>João Nogueira; Direction Systems Ltda.; Jairo Marques</Authors>
-        <Company>João Nogueira; Direction Systems Ltda.</Company>
+        <Version>1.0.5</Version>
+        <Authors>João Nogueira; João Piva; Direction Systems Ltda.; Jairo Marques</Authors>
+        <Company>João Nogueira; João Piva; Direction Systems Ltda.</Company>
         <Copyright>Copyright © Direction Systems Ltda. 2026</Copyright>
         <Description>Fork da biblioteca criada por Direction Systems Ltda.; Jairo Marques; Biblioteca .NET para gerar DANFSe (PDF) a partir do XML da Nota Fiscal de Serviço Nacional (NFSe/DPS), sem depender de endpoint externo. Com ajustes para que funcione em ambiente Linux.</Description>
         <RepositoryUrl>https://github.com/Nogs0/direction-nfse-danfe</RepositoryUrl>
