@@ -14,9 +14,9 @@ public sealed class DanfeService
         _renderer = new DanfeHtmlRenderer(options);
     }
 
-    public DanfeResult Generate(NFSeSchema nfse, DanfeEnvironment environment, bool isCancelled = false)
+    public DanfeResult Generate(NFSeSchema nfse, DanfeEnvironment environment, bool isCancelled = false, bool isReplaced = false)
     {
-        var (html, warnings) = _renderer.Render(nfse, environment, isCancelled);
+        var (html, warnings) = _renderer.Render(nfse, environment, isCancelled, isReplaced);
         var pdfBytes = DanfePdfGenerator.Generate(html);
 
         return new DanfeResult
@@ -33,6 +33,13 @@ public sealed class DanfeService
         using var sr = new StringReader(xml);
         var nfse = Deserialize(sr);
         return Generate(nfse, environment, isCancelled);
+    }
+
+    public DanfeResult Generate(string xml, DanfeEnvironment environment, DanfeStatus status)
+    {
+        using var sr = new StringReader(xml);
+        var nfse = Deserialize(sr);
+        return Generate(nfse, environment, status == DanfeStatus.Cancelada, status == DanfeStatus.Substituida);
     }
 
     public DanfeResult Generate(Stream xmlStream, DanfeEnvironment environment, bool isCancelled = false)

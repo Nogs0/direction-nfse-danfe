@@ -23,7 +23,7 @@ public sealed class DanfeHtmlRenderer
         _templatePath = _options.TemplatePath ?? Path.Combine(basePath, "Assets", "Templates", "Danfe.html");
     }
 
-    public (string Html, IReadOnlyList<DanfeWarning> Warnings) Render(NFSeSchema nfse, DanfeEnvironment environment, bool isCancelled = false)
+    public (string Html, IReadOnlyList<DanfeWarning> Warnings) Render(NFSeSchema nfse, DanfeEnvironment environment, bool isCancelled = false, bool isReplaced = false)
     {
         if (nfse == null) throw new ArgumentNullException(nameof(nfse));
         if (nfse.infNFSe == null) throw new ArgumentException("NFSe.infNFSe não pode ser nulo", nameof(nfse));
@@ -173,9 +173,7 @@ public sealed class DanfeHtmlRenderer
               transform-origin: 50% 50%;
               font-size:96px;
               font-weight:800;
-              color: rgba(200,0,0,0.18);
-              border: 8px solid rgba(200,0,0,0.18);
-              padding: 20px 40px;
+              color: rgba(215,215,215,0.6);
               text-transform:uppercase;
               z-index:9999;
               pointer-events:none;
@@ -184,11 +182,33 @@ public sealed class DanfeHtmlRenderer
               </div>"
             : string.Empty;
 
+        string substituidaDiv = (isReplaced && !isCancelled)
+            ? @"<div style=""
+              position:absolute;
+              top:50%;
+              left:50%;
+              display:inline-block;                 /* importante */
+              -webkit-transform: translate(-50%, -50%) rotate(-30deg);
+              transform: translate(-50%, -50%) rotate(-30deg);
+              -webkit-transform-origin: 50% 50%;
+              transform-origin: 50% 50%;
+              font-size:96px;
+              font-weight:800;
+              color: rgba(215,215,215,0.6);
+              text-transform:uppercase;
+              z-index:9999;
+              pointer-events:none;
+              white-space:nowrap;"">
+                          SUBSTITUÍDA
+              </div>"
+            : string.Empty;
+
         // Monta mapa de placeholders (agora com warnings)
         var map = new Dictionary<string, string>
         {
             // Cancelada
             ["{{NFSE_CANCELADA_DIV}}"] = canceladaDiv,
+            ["{{NFSE_SUBSTITUIDA_DIV}}"] = substituidaDiv,
             // Fonts
             ["{{FONT_FAMILY}}"] = _options.FontFamily ?? "Verdana, Helvetica, sans-serif;",
             ["{{FONT_SIZE}}"] = _options.FontSize ?? "10px;",
@@ -300,7 +320,8 @@ public sealed class DanfeHtmlRenderer
                 kv.Key == "{{SERV_DESC_HTML}}" ||
                 kv.Key == "{{INF_COMPLEMENTARES}}" ||
                 kv.Key == "{{LOGO_NAME}}" ||
-                kv.Key == "{{NFSE_CANCELADA_DIV}}";
+                kv.Key == "{{NFSE_CANCELADA_DIV}}" ||
+                kv.Key == "{{NFSE_SUBSTITUIDA_DIV}}";
 
             string value = isRawHtml ? kv.Value : Helper.HtmlEncode(kv.Value);
             template = template.Replace(kv.Key, value ?? string.Empty);
