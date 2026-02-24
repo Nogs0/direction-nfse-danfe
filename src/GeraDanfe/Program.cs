@@ -32,7 +32,7 @@ var outputPdfPath = Path.Combine(outputDir, $"Danfe_{numeroNFSe}.pdf");
 
 var danfeService = new DanfeService();
 
-var result = danfeService.Generate(nfse, DanfeEnvironment.Production);
+var result = danfeService.Generate(nfse, DanfeEnvironment.Production, false, true);
 
 if (result.PdfBytes == null || result.PdfBytes.Length == 0)
     throw new InvalidOperationException("GeraDanfe retornou null ou bytes vazios (PDF).");
