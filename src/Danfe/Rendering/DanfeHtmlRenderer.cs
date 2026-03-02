@@ -175,7 +175,7 @@ public sealed class DanfeHtmlRenderer
               font-weight:800;
               color: rgba(215,215,215,0.6);
               text-transform:uppercase;
-              z-index:9999;
+              z-index:-9999;
               pointer-events:none;
               white-space:nowrap;"">
                           CANCELADA
@@ -199,7 +199,7 @@ public sealed class DanfeHtmlRenderer
               font-weight:800;
               color: rgba(215,215,215,0.6);
               text-transform:uppercase;
-              z-index:9999;
+              z-index:-9999;
               pointer-events:none;
               white-space:nowrap;"">
                           SUBSTITUÍDA
