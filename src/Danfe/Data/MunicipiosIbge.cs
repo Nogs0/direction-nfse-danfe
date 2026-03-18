@@ -8,7 +8,7 @@ namespace Direction.NFSe.Danfe
     public static class MunicipiosIbge
     {
         private static readonly object _lock = new object();
-        private static bool _initialized;
+        private static volatile bool _initialized;
         private static Dictionary<int, Municipio> _municipiosPorCodigo = [];
 
         /// <summary>

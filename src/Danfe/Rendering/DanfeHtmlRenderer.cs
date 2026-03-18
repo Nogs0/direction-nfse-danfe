@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Direction.NFSe.Danfe;
 
@@ -14,6 +15,8 @@ public sealed class DanfeHtmlRenderer
 
     private readonly string _templatePath;
     private readonly DanfeOptions _options;
+    private readonly string _templateContent;
+    private static int _municipiosInitialized = 0;
 
     public DanfeHtmlRenderer(DanfeOptions options)
     {
@@ -21,6 +24,23 @@ public sealed class DanfeHtmlRenderer
 
         var basePath = _options.BasePath ?? AppContext.BaseDirectory;
         _templatePath = _options.TemplatePath ?? Path.Combine(basePath, "Assets", "Templates", "Danfe.html");
+        _templateContent = File.ReadAllText(_templatePath, Encoding.UTF8);
+
+        // Inicializa municípios uma única vez, thread-safe
+        if (_options.AutoInitializeMunicipios)
+        {
+            InitializeMunicipiosOnce(basePath);
+        }
+    }
+    private void InitializeMunicipiosOnce(string basePath)
+    {
+        // Interlocked garante que só uma thread inicializa
+        if (Interlocked.CompareExchange(ref _municipiosInitialized, 1, 0) == 0)
+        {
+            var estados = _options.EstadosCsvPath ?? Path.Combine(basePath, "Assets", "estados.csv");
+            var municipios = _options.MunicipiosCsvPath ?? Path.Combine(basePath, "Assets", "municipios.csv");
+            MunicipiosIbge.Initialize(estados, municipios);
+        }
     }
 
     public (string Html, IReadOnlyList<DanfeWarning> Warnings) Render(NFSeSchema nfse, DanfeEnvironment environment, bool isCancelled = false, bool isReplaced = false)
@@ -33,7 +53,7 @@ public sealed class DanfeHtmlRenderer
         var isProd = environment == DanfeEnvironment.Production;
 
         var validade = isProd ? "" : "NFS-e SEM VALIDADE JURÍDICA";
-        var template = File.ReadAllText(_templatePath, Encoding.UTF8);
+        var template = _templateContent;
 
         // Root shortcuts (evita repetir cadeia e facilita paths)
         var inf = nfse.infNFSe;
@@ -113,8 +133,6 @@ public sealed class DanfeHtmlRenderer
             warnings.FieldMissing("cLocIncid", "infNFSe.cLocIncid", "-");
         else if (municpioISSQN == null)
             warnings.MunicipioNotFound("infNFSe.cLocIncid");
-
-        var logoBase64 = Helper.GetLogo(Path.Combine(AppContext.BaseDirectory, municipioPrestador?.LogoPath ?? string.Empty));
 
         // Logo da nfse
         var logoNfse = _options.LogoNFSePath != null ? Helper.GetLogo(_options.LogoNFSePath) : Helper.GetLogo(Path.Combine(AppContext.BaseDirectory, "Assets", "Logos", "nfse.png"));
@@ -222,7 +240,7 @@ public sealed class DanfeHtmlRenderer
             ["{{FONT_SIZE_QRCODE}}"] = _options.FontSize ?? "10px;",
             // Logos
             ["{{NFSE_LOGO}}"] = logoNfse ?? TransparentPixelBase64,
-            ["{{PREFEITURA_LOGO}}"] = logoBase64 ?? TransparentPixelBase64,
+            ["{{PREFEITURA_LOGO}}"] = TransparentPixelBase64,
             ["{{LOGO_NAME}}"] = DanfeFallback.OrDash(municipioPrestador?.LogoName, warnings, fieldName: "LogoName", path: "MunicipiosIbge.GetMunicipio(...).LogoName"),
 
             // Cabeçalho
