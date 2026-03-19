@@ -1,49 +1,145 @@
 using System;
-using DinkToPdf;
-using DinkToPdf.Contracts;
+using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
+using PuppeteerSharp;
+using PuppeteerSharp.Media;
+
 namespace Direction.NFSe.Danfe;
 
-public static class DanfePdfGenerator
+public sealed class DanfePdfGenerator : IAsyncDisposable
 {
-    private static readonly IConverter _converter = new SynchronizedConverter(new PdfTools());
+    private IBrowser? _browser;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
+    private readonly SemaphoreSlim _poolLock;
+    private readonly ConcurrentBag<IPage> _pagePool = new();
+    private readonly int _poolSize;
 
-    public static byte[] Generate(string html)
+    public DanfePdfGenerator(int poolSize = 0)
     {
+        _poolSize = poolSize > 0 ? poolSize : Environment.ProcessorCount;
+        _poolLock = new SemaphoreSlim(_poolSize, _poolSize);
+    }
+
+    public async Task<IBrowser> GetBrowserAsync()
+    {
+        if (_browser is { IsConnected: true })
+            return _browser;
+
+        await _initLock.WaitAsync();
         try
         {
-            var doc = new HtmlToPdfDocument()
-            {
-                GlobalSettings = {
-                    ColorMode = ColorMode.Color,
-                    Orientation = Orientation.Portrait,
-                    PaperSize = PaperKind.A4,
-                    Margins = new MarginSettings { Top = 2, Bottom = 2, Left = 2, Right = 2 },
-                    DPI = 300
-                },
-                Objects = {
-                    new ObjectSettings() {
-                        PagesCount = true,
-                        HtmlContent = html,
-                        WebSettings = {
-                            DefaultEncoding = "utf-8",
-                            EnableIntelligentShrinking = false
-                        },
-                    }
-                }
-            };
+            if (_browser is { IsConnected: true })
+                return _browser;
 
-            return _converter.Convert(doc);
-        }
-        catch (TypeInitializationException ex)
-        {
-            Console.WriteLine($"ERRO NO TIPO: {ex.Message}");
-            if (ex.InnerException != null)
+            var executablePath = Environment.OSVersion.Platform == PlatformID.Unix
+                ? "/usr/bin/chromium"
+                : null;
+
+            if (executablePath == null)
             {
-                // ESSA é a mensagem que importa
-                Console.WriteLine($"ERRO REAL (INNER): {ex.InnerException.Message}");
-                Console.WriteLine($"STACK TRACE: {ex.InnerException.StackTrace}");
+                var fetcher = new BrowserFetcher();
+                await fetcher.DownloadAsync();
             }
-            throw;
+
+            _browser = await Puppeteer.LaunchAsync(new LaunchOptions
+            {
+                Headless = true,
+                ExecutablePath = executablePath,
+                Args = new[]
+                {
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--single-process"
+                }
+            });
+
+            // Pré-aquece o pool criando as páginas no startup
+            var tasks = new Task[_poolSize];
+            for (var i = 0; i < _poolSize; i++)
+                tasks[i] = WarmUpPageAsync();
+
+            await Task.WhenAll(tasks);
+
+            return _browser;
         }
+        finally
+        {
+            _initLock.Release();
+        }
+    }
+
+    private async Task WarmUpPageAsync()
+    {
+        var page = await _browser!.NewPageAsync();
+        await ConfigurePageAsync(page);
+        _pagePool.Add(page);
+    }
+
+    private static async Task ConfigurePageAsync(IPage page)
+    {
+        await page.SetRequestInterceptionAsync(true);
+        page.Request += (_, e) =>
+        {
+            if (e.Request.Url.StartsWith("data:") || e.Request.Url == "about:blank")
+                _ = e.Request.ContinueAsync();
+            else
+                _ = e.Request.AbortAsync();
+        };
+    }
+
+    public async Task<byte[]> GenerateAsync(string html, CancellationToken ct = default)
+    {
+        await GetBrowserAsync();
+        await _poolLock.WaitAsync(ct);
+
+        // Pega página do pool ou cria uma nova se o pool estiver vazio por algum erro
+        if (!_pagePool.TryTake(out var page))
+        {
+            page = await _browser!.NewPageAsync();
+            await ConfigurePageAsync(page);
+        }
+
+        try
+        {
+            await page.SetContentAsync(html, new NavigationOptions
+            {
+                Timeout = 60_000,
+                WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }
+            });
+
+            return await page.PdfDataAsync(new PdfOptions
+            {
+                Format = PaperFormat.A4,
+                PrintBackground = true,
+                MarginOptions = new MarginOptions
+                {
+                    Top = "2mm",
+                    Bottom = "2mm",
+                    Left = "2mm",
+                    Right = "2mm"
+                }
+            });
+        }
+        finally
+        {
+            // Devolve a página ao pool em vez de fechar
+            _pagePool.Add(page);
+            _poolLock.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        while (_pagePool.TryTake(out var page))
+            await page.CloseAsync();
+
+        if (_browser != null)
+            await _browser.CloseAsync();
+
+        _initLock.Dispose();
+        _poolLock.Dispose();
     }
 }
