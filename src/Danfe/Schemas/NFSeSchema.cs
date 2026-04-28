@@ -19,7 +19,7 @@ namespace Direction.NFSe.Danfe
         public string? Id { get; set; }
         public string? xLocEmi { get; set; }
         public string? xLocPrestacao { get; set; }
-        public int nNFSe { get; set; }
+        public long nNFSe { get; set; }
         public string? cLocIncid { get; set; }
         public string? xLocIncid { get; set; }
         public string? xTribNac { get; set; }
