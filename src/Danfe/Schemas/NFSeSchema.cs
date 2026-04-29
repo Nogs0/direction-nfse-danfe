@@ -101,7 +101,7 @@ namespace Direction.NFSe.Danfe
         public string? dhEmi { get; set; }
         public string? verAplic { get; set; }
         public int serie { get; set; }
-        public int nDPS { get; set; }
+        public long nDPS { get; set; }
         public string? dCompet { get; set; }
         public int tpEmit { get; set; }
         public int? cMotivoEmisTI { get; set; }
