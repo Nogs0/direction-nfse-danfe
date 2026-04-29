@@ -26,10 +26,10 @@ namespace Direction.NFSe.Danfe
         public string? xTribMun { get; set; }
         public string? xNBS { get; set; }
         public string? verAplic { get; set; }
-        public int ambGer { get; set; }
+        public long ambGer { get; set; }
         public int tpEmis { get; set; }
-        public int procEmi { get; set; }
-        public int cStat { get; set; }
+        public long procEmi { get; set; }
+        public long cStat { get; set; }
         public DateTime dhProc { get; set; }
         public long nDFSe { get; set; }
         public Emit? emit { get; set; }
@@ -100,18 +100,18 @@ namespace Direction.NFSe.Danfe
         public int tpAmb { get; set; }
         public string? dhEmi { get; set; }
         public string? verAplic { get; set; }
-        public int serie { get; set; }
+        public long serie { get; set; }
         public long nDPS { get; set; }
         public string? dCompet { get; set; }
         public int tpEmit { get; set; }
-        public int? cMotivoEmisTI { get; set; }
+        public long? cMotivoEmisTI { get; set; }
         public string? chNFSeRej { get; set; }
-        public int cLocEmi { get; set; }
+        public long cLocEmi { get; set; }
 
         public NFSeSubstituida? subst { get; set; }
         public PrestadorNFS? prest { get; set; }
         public Tomador? toma { get; set; }
-        public Intermediario? interm { get; set; }
+        public longermediario? longerm { get; set; }
         public Servico? serv { get; set; }
         public Valores? valores { get; set; }
         public IBSCBS? IBSCBS { get; set; }
@@ -123,7 +123,7 @@ namespace Direction.NFSe.Danfe
     public class NFSeSubstituida
     {
         public string? chSubstda { get; set; }
-        public int cMotivo { get; set; }
+        public long cMotivo { get; set; }
         public string? xMotivo { get; set; }
     }
 
@@ -132,7 +132,7 @@ namespace Direction.NFSe.Danfe
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
         public string? NIF { get; set; }
-        public int cNaoNIF { get; set; }
+        public long cNaoNIF { get; set; }
         public bool ShouldSerializecNaoNIF() => !string.IsNullOrEmpty(NIF);
         public string? CAEPF { get; set; }
         public string? IM { get; set; }
@@ -184,7 +184,7 @@ namespace Direction.NFSe.Danfe
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
         public string? NIF { get; set; }
-        public int cNaoNIF { get; set; }
+        public long cNaoNIF { get; set; }
         public bool ShouldSerializecNaoNIF() => !string.IsNullOrEmpty(NIF);
         public string? CAEPF { get; set; }
         public string? IM { get; set; }
@@ -194,12 +194,12 @@ namespace Direction.NFSe.Danfe
         public string? email { get; set; }
     }
 
-    public class Intermediario
+    public class longermediario
     {
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
         public string? NIF { get; set; }
-        public int cNaoNIF { get; set; }
+        public long cNaoNIF { get; set; }
         public bool ShouldSerializecNaoNIF() => !string.IsNullOrEmpty(NIF);
         public string? CAEPF { get; set; }
         public string? IM { get; set; }
@@ -227,16 +227,16 @@ namespace Direction.NFSe.Danfe
 
     public class comExterior
     {
-        public int mdPrestacao { get; set; }
-        public int vincPrest { get; set; }
+        public long mdPrestacao { get; set; }
+        public long vincPrest { get; set; }
         public int tpMoeda { get; set; }
         public decimal vServMoeda { get; set; }
         public string? mecAFComexP { get; set; }
         public string? mecAFComexT { get; set; }
-        public int movTempBens { get; set; }
+        public long movTempBens { get; set; }
         public string? nDI { get; set; }
         public string? nRE { get; set; }
-        public int mdic { get; set; }
+        public long mdic { get; set; }
     }
 
     public class obra
@@ -267,8 +267,8 @@ namespace Direction.NFSe.Danfe
         public string? cTribNac { get; set; }
         public string? cTribMun { get; set; }
         public string? xDescServ { get; set; }
-        public int cNBS { get; set; }
-        public string? cIntContrib { get; set; }
+        public long cNBS { get; set; }
+        public string? clongContrib { get; set; }
     }
 
     public class VServPrest
@@ -367,7 +367,7 @@ namespace Direction.NFSe.Danfe
 
     public class BM
     {
-        public int nBM { get; set; }
+        public long nBM { get; set; }
         public decimal? vRedBCBM { get; set; }
         public decimal? pRedBCBM { get; set; }
         public int tpRetISSQN { get; set; }
@@ -452,7 +452,7 @@ namespace Direction.NFSe.Danfe
     {
         public VTotTrib? vTotTrib { get; set; }
         public PTotTrib? pTotTrib { get; set; }
-        public int? indTotTrib { get; set; }
+        public long? indTotTrib { get; set; }
         public decimal pTotTribSN { get; set; }
 
         // ShouldSerialize para INT?
@@ -461,13 +461,13 @@ namespace Direction.NFSe.Danfe
 
     public class IBSCBS
     {
-        public int finNFSe { get; set; }
-        public int indFinal { get; set; }
+        public long finNFSe { get; set; }
+        public long indFinal { get; set; }
         public string? cIndOp { get; set; }
         public string? tpOper { get; set; }
         public gRefNFSe? gRefNFSe { get; set; }
         public string? tpEnteGov { get; set; }
-        public int indDest { get; set; }
+        public long indDest { get; set; }
         public dest? dest { get; set; }
         public imovel? imovel { get; set; }
         public valores? valores { get; set; }
@@ -484,7 +484,7 @@ namespace Direction.NFSe.Danfe
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
         public string? NIF { get; set; }
-        public int cNaoNIF { get; set; }
+        public long cNaoNIF { get; set; }
         public bool ShouldSerializecNaoNIF() => !string.IsNullOrEmpty(NIF);
         public string? xNome { get; set; }
         public end? end { get; set; }
@@ -506,7 +506,7 @@ namespace Direction.NFSe.Danfe
 
     public class endNac
     {
-        public int cMun { get; set; }
+        public long cMun { get; set; }
         public string? CEP { get; set; }
     }
 
@@ -545,14 +545,14 @@ namespace Direction.NFSe.Danfe
 
     public class dFeNacional
     {
-        public int tipoChaveDFe { get; set; }
+        public long tipoChaveDFe { get; set; }
         public string? xTipoChaveDFe { get; set; }
         public string? chaveDFe { get; set; }
     }
 
     public class docFiscalOutro
     {
-        public int cMunDocFiscal { get; set; }
+        public long cMunDocFiscal { get; set; }
         public string? nDocFiscal { get; set; }
         public string? xDocFiscal { get; set; }
     }
@@ -568,7 +568,7 @@ namespace Direction.NFSe.Danfe
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
         public string? NIF { get; set; }
-        public int cNaoNIF { get; set; }
+        public long cNaoNIF { get; set; }
         public bool ShouldSerializecNaoNIF() => !string.IsNullOrEmpty(NIF);
         public string? xNome { get; set; }
     }
@@ -596,8 +596,8 @@ namespace Direction.NFSe.Danfe
 
     public class gDif
     {
-        public int pDifUF { get; set; }
-        public int pDifMun { get; set; }
-        public int pDifCBS { get; set; }
+        public long pDifUF { get; set; }
+        public long pDifMun { get; set; }
+        public long pDifCBS { get; set; }
     }
 }
