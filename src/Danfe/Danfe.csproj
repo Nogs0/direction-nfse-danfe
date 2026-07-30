@@ -63,15 +63,15 @@
 
     <ItemGroup>
         <!-- Para projetos SDK/PackageReference -->
-        <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="buildTransitive\Direction.NFSe.Danfe.targets" />
+        <None Include="buildTransitive\Nogueira.NFSe.Danfe.FixLinux.targets" Pack="true" PackagePath="buildTransitive\Nogueira.NFSe.Danfe.FixLinux.targets" />
 
         <!-- Para projetos .NET Framework clássicos (non-SDK) -->
-        <None Include="buildTransitive\Direction.NFSe.Danfe.targets" Pack="true" PackagePath="build\Direction.NFSe.Danfe.targets" />
+        <None Include="buildTransitive\Nogueira.NFSe.Danfe.FixLinux.targets" Pack="true" PackagePath="build\Nogueira.NFSe.Danfe.FixLinux.targets" />
     </ItemGroup>
 
 
     <ItemGroup>
-        <Content Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Direction.NFSe.Danfe\Assets">
+        <Content Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Nogueira.NFSe.Danfe.FixLinux\Assets">
             <PackageCopyToOutput>true</PackageCopyToOutput>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
