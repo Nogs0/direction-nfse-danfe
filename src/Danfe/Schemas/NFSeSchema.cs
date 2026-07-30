@@ -111,7 +111,9 @@ namespace Direction.NFSe.Danfe
         public NFSeSubstituida? subst { get; set; }
         public PrestadorNFS? prest { get; set; }
         public Tomador? toma { get; set; }
-        public longermediario? longerm { get; set; }
+
+        [XmlElement("interm")]
+        public Intermediario? interm { get; set; }
         public Servico? serv { get; set; }
         public Valores? valores { get; set; }
         public IBSCBS? IBSCBS { get; set; }
@@ -194,7 +196,7 @@ namespace Direction.NFSe.Danfe
         public string? email { get; set; }
     }
 
-    public class longermediario
+    public class Intermediario
     {
         public string? CNPJ { get; set; }
         public string? CPF { get; set; }
@@ -260,6 +262,8 @@ namespace Direction.NFSe.Danfe
         public string? idDocTec { get; set; }
         public string? docRef { get; set; }
         public string? xInfComp { get; set; }
+        public string? xPed { get; set; }
+        public string? xItemPed { get; set; }
     }
 
     public class CServ
@@ -464,6 +468,8 @@ namespace Direction.NFSe.Danfe
         public long finNFSe { get; set; }
         public long indFinal { get; set; }
         public string? cIndOp { get; set; }
+        public string? cLocalidadeIncid { get; set; }
+        public string? xLocalidadeIncid { get; set; }
         public string? tpOper { get; set; }
         public gRefNFSe? gRefNFSe { get; set; }
         public string? tpEnteGov { get; set; }
@@ -471,6 +477,36 @@ namespace Direction.NFSe.Danfe
         public dest? dest { get; set; }
         public imovel? imovel { get; set; }
         public valores? valores { get; set; }
+        public totCIBS? totCIBS { get; set; }
+    }
+
+    public class totCIBS
+    {
+        public gIBS? gIBS { get; set; }
+        public gCBS? gCBS { get; set; }
+        public decimal? vTotNF { get; set; }
+    }
+
+    public class gIBS
+    {
+        public decimal? vIBSTot { get; set; }
+        public gIBSMunTot? gIBSMunTot { get; set; }
+        public gIBSUFTot? gIBSUFTot { get; set; }
+    }
+
+    public class gIBSMunTot
+    {
+        public decimal? vIBSMun { get; set; }
+    }
+
+    public class gIBSUFTot
+    {
+        public decimal? vIBSUF { get; set; }
+    }
+
+    public class gCBS
+    {
+        public decimal? vCBS { get; set; }
     }
 
     public class gRefNFSe
@@ -522,6 +558,32 @@ namespace Direction.NFSe.Danfe
     {
         public gReeRepRes? gReeRepRes { get; set; }
         public trib? trib { get; set; }
+        public decimal? vCalcReeRepRes { get; set; }
+        public decimal? vBC { get; set; }
+        public gValoresUF? uf { get; set; }
+        public gValoresMun? mun { get; set; }
+        public gValoresFed? fed { get; set; }
+    }
+
+    public class gValoresUF
+    {
+        public decimal? pRedAliqUF { get; set; }
+        public decimal? pIBSUF { get; set; }
+        public decimal? pAliqEfetUF { get; set; }
+    }
+
+    public class gValoresMun
+    {
+        public decimal? pRedAliqMun { get; set; }
+        public decimal? pIBSMun { get; set; }
+        public decimal? pAliqEfetMun { get; set; }
+    }
+
+    public class gValoresFed
+    {
+        public decimal? pRedAliqCBS { get; set; }
+        public decimal? pCBS { get; set; }
+        public decimal? pAliqEfetCBS { get; set; }
     }
 
     public class gReeRepRes

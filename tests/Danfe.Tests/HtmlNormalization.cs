@@ -9,11 +9,14 @@ internal static class HtmlNormalization
         // Normalizações típicas:
         html = html.Replace("\r\n", "\n");
 
-        // Remove whitespace redundante entre tags (ajuda muito snapshot)
-        html = Regex.Replace(html, @">\s+<", "><");
+        // Colapsa qualquer sequência de espaços/tabs/quebras de linha em um único espaço —
+        // mesma semântica de colapso de whitespace que um navegador aplica ao renderizar HTML,
+        // então diferenças de indentação/quebra de linha (ex.: reformatação via Prettier) não
+        // devem quebrar o snapshot.
+        html = Regex.Replace(html, @"\s+", " ");
 
-        // Reduz múltiplos espaços
-        html = Regex.Replace(html, @"[ \t]{2,}", " ");
+        // Remove espaço redundante entre tags adjacentes
+        html = Regex.Replace(html, @">\s+<", "><");
 
         // Se tiver base64 muito variável:
         // html = Regex.Replace(html, "data:image/png;base64,[A-Za-z0-9+/=]+", "data:image/png;base64,<redacted>");

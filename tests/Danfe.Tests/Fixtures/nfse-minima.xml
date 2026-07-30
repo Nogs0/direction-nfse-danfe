@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+  <infNFSe Id="NFS35000000033333333000155000000000000000000000000002">
+    <xLocEmi>Campinas</xLocEmi>
+    <xLocPrestacao>Campinas</xLocPrestacao>
+    <nNFSe>9002</nNFSe>
+    <cLocIncid>3509502</cLocIncid>
+    <xLocIncid>Campinas</xLocIncid>
+    <xTribNac>Exportação de serviços</xTribNac>
+    <xNBS>Serviços de tradução e interpretação</xNBS>
+    <verAplic>TesteFixture_1.0.0</verAplic>
+    <ambGer>2</ambGer>
+    <tpEmis>1</tpEmis>
+    <procEmi>2</procEmi>
+    <cStat>100</cStat>
+    <dhProc>2026-06-01T14:00:00-03:00</dhProc>
+    <nDFSe>2</nDFSe>
+    <emit>
+      <CPF>39053344705</CPF>
+      <xNome>PRESTADOR AUTONOMO DE TESTE</xNome>
+      <enderNac>
+        <xLgr>RUA AUTONOMA</xLgr>
+        <nro>50</nro>
+        <xBairro>CENTRO</xBairro>
+        <cMun>3509502</cMun>
+        <UF>SP</UF>
+        <CEP>13000000</CEP>
+      </enderNac>
+      <email>autonomo@teste.com.br</email>
+    </emit>
+    <valores>
+      <vLiq>500.00</vLiq>
+    </valores>
+    <DPS versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+      <infDPS Id="DPS35095020033333333000155000000000000000000000002">
+        <tpAmb>1</tpAmb>
+        <dhEmi>2026-06-01T13:59:40-03:00</dhEmi>
+        <verAplic>TesteFixture_1.0.0</verAplic>
+        <serie>1</serie>
+        <nDPS>2</nDPS>
+        <dCompet>2026-06-01</dCompet>
+        <tpEmit>1</tpEmit>
+        <cLocEmi>3509502</cLocEmi>
+        <prest>
+          <CPF>39053344705</CPF>
+          <email>autonomo@teste.com.br</email>
+          <regTrib>
+            <opSimpNac>1</opSimpNac>
+            <regEspTrib>5</regEspTrib>
+          </regTrib>
+        </prest>
+        <serv>
+          <locPrest>
+            <cLocPrestacao>3509502</cLocPrestacao>
+            <cPaisPrestacao>BR</cPaisPrestacao>
+          </locPrest>
+          <cServ>
+            <cTribNac>170201</cTribNac>
+            <xDescServ>Tradução de documentos técnicos.</xDescServ>
+            <cNBS>106000000</cNBS>
+          </cServ>
+        </serv>
+        <valores>
+          <vServPrest>
+            <vServ>500.00</vServ>
+          </vServPrest>
+          <trib>
+            <tribMun>
+              <tribISSQN>3</tribISSQN>
+              <tpRetISSQN>1</tpRetISSQN>
+            </tribMun>
+            <totTrib>
+              <pTotTrib>
+                <pTotTribFed>10.00</pTotTribFed>
+                <pTotTribEst>0.00</pTotTribEst>
+                <pTotTribMun>0.00</pTotTribMun>
+              </pTotTrib>
+            </totTrib>
+          </trib>
+        </valores>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>

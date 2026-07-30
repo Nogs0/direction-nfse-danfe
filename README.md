@@ -77,12 +77,13 @@ File.WriteAllBytes("danfse.pdf", result.PdfBytes);
 
 ---
 
-## Para inserir logos do seu município
-- O repositório não tem a logo de todos os municípios. Você pode criar a do seu município obedecendo o padrão de **400x400** pixels e colocando na pasta **"Assets\Logos"**.
-- Você deve ainda modificar o arquivo **municipios.csv**, localizando seu município e complementando as informações de logo_path e logo_name, como no exemplo abaixo para **Recife**:
-```csv
-2611606,Recife,-8.04666,-34.8771,1,26,2531,81,America/Sao_Paulo,Assets\Logos\logoRecife.png,Prefeitura do Recife<br>Secretaria de Finanças<br>faleconosco@recife.pe.gov.br
-```
+## Layout DANFSe v2.0
+
+A partir da versão `1.1.0.0`, o layout segue o modelo **DANFSe v2.0** definido pela Nota Técnica
+nº 008/2026 (SE/CGNFS-e), incluindo os blocos de **Destinatário da Operação**, **Intermediário
+da Operação** e **Tributação IBS/CBS**. O cabeçalho passou a exibir município, ambiente gerador
+e tipo de ambiente do emitente no lugar da logo por município (recurso do layout v1.0 removido,
+pois não faz parte do modelo oficial vigente).
 
 ---
 

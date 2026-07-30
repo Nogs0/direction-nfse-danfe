@@ -29,4 +29,7 @@ public sealed class DanfeOptions
 
     /// <summary>Se true, inicializa automaticamente o cache de municípios ao gerar o PDF.</summary>
     public bool AutoInitializeMunicipios { get; init; } = true;
+
+    /// <summary>Se true, exibe o bloco opcional de Canhoto no DANFSe (NT-008, bloco opcional).</summary>
+    public bool ExibirCanhoto { get; init; } = true;
 }

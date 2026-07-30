@@ -73,6 +73,7 @@ public sealed class DanfeHtmlRenderer
         DateTime? competencia = Helper.TryParseDate(infDps.dCompet);
         if (!competencia.HasValue) warnings.FieldMissing("dCompet", "infNFSe.DPS.InfDPS.dCompet", "-");
 
+        // NT-008 4.4.3: a data/hora deve reproduzir a informação do XML, sem redução/acréscimo de fuso.
         DateTime? dhEmissaoNfs = inf.dhProc;
         if (!dhEmissaoNfs.HasValue) warnings.FieldMissing("dhProc", "infNFSe.dhProc", "-");
 
@@ -105,7 +106,7 @@ public sealed class DanfeHtmlRenderer
 
         if (string.IsNullOrWhiteSpace(descricaoTributoMunicipal)) warnings.FieldMissing("cTribMun/xTribMun", "infNFSe.DPS.InfDPS.serv.cServ.cTribMun | infNFSe.xTribMun", "-");
 
-        // QRCode
+        // QRCode (NT-008 2.4.3: dimensões mínimas 1,52cm x 1,52cm)
         string url = $"https://www.{(isProd ? "" : "producaorestrita.")}nfse.gov.br/ConsultaPublica/?tpc=1&chave={chaveAcesso}";
         var bytes = Helper.GetQrCode(url);
         var imgQrCodeSrc = $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
@@ -134,7 +135,10 @@ public sealed class DanfeHtmlRenderer
         else if (municpioISSQN == null)
             warnings.MunicipioNotFound("infNFSe.cLocIncid");
 
-        // Logo da nfse
+        // Município emitente (cabeçalho)
+        var municipioEmitente = DanfeFallback.OrDash($"{inf.xLocEmi} - {inf.emit?.enderNac?.UF}", warnings, "Município Emitente", "infNFSe.xLocEmi | infNFSe.emit.enderNac.UF");
+
+        // Logo oficial da NFS-e (cabeçalho)
         var logoNfse = _options.LogoNFSePath != null ? Helper.GetLogo(_options.LogoNFSePath) : Helper.GetLogo(Path.Combine(AppContext.BaseDirectory, "Assets", "Logos", "nfse.png"));
 
         // Caminhos/valores auxiliares
@@ -178,59 +182,94 @@ public sealed class DanfeHtmlRenderer
                 break;
         }
 
-        // Verifica ses a NFSe está cancelada
-        string canceladaDiv = isCancelled
-            ? @"<div style=""
-              position:absolute;
-              top:50%;
-              left:50%;
-              display:inline-block;                 /* importante */
-              -webkit-transform: translate(-50%, -50%) rotate(-30deg);
-              transform: translate(-50%, -50%) rotate(-30deg);
-              -webkit-transform-origin: 50% 50%;
-              transform-origin: 50% 50%;
-              font-size:96px;
-              font-weight:800;
-              color: rgba(215,215,215,0.6);
-              text-transform:uppercase;
-              z-index:-9999;
-              pointer-events:none;
-              white-space:nowrap;"">
-                          CANCELADA
-              </div>"
-            : string.Empty;
-
+        // Verifica se a NFSe está cancelada/substituída (marca d'água, NT-008 2.5.1/2.5.2)
+        string canceladaDiv = isCancelled ? BuildMarcaDagua("CANCELADA") : string.Empty;
         if (canceladaDiv == string.Empty)
             warnings.GenericWarning("CanceladaDiv vazia, status da nota não é cancelada");
 
-        string substituidaDiv = (isReplaced && !isCancelled)
-            ? @"<div style=""
-              position:absolute;
-              top:50%;
-              left:50%;
-              display:inline-block;                 /* importante */
-              -webkit-transform: translate(-50%, -50%) rotate(-30deg);
-              transform: translate(-50%, -50%) rotate(-30deg);
-              -webkit-transform-origin: 50% 50%;
-              transform-origin: 50% 50%;
-              font-size:96px;
-              font-weight:800;
-              color: rgba(215,215,215,0.6);
-              text-transform:uppercase;
-              z-index:-9999;
-              pointer-events:none;
-              white-space:nowrap;"">
-                          SUBSTITUÍDA
-              </div>"
-            : string.Empty;
-
+        string substituidaDiv = (isReplaced && !isCancelled) ? BuildMarcaDagua("SUBSTITUÍDA") : string.Empty;
         if (substituidaDiv == string.Empty)
             warnings.GenericWarning("SubstituidaDiv vazia, status da nota não é substituida");
+
+        // Bloco Tomador/Adquirente (NT-008 Nota 2)
+        var toma = infDps.toma;
+        var tomadorIdentificado = toma != null && (
+            !string.IsNullOrWhiteSpace(toma.CNPJ) ||
+            !string.IsNullOrWhiteSpace(toma.CPF) ||
+            !string.IsNullOrWhiteSpace(toma.NIF) ||
+            !string.IsNullOrWhiteSpace(toma.xNome));
+
+        string blocoTomador = tomadorIdentificado
+            ? BuildTomadorBloco(toma!, warnings, ptBR)
+            : BuildParticipanteNaoIdentificadoBloco("TOMADOR/ADQUIRENTE", "TOMADOR/ADQUIRENTE DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e");
+
+        // Bloco Destinatário da Operação (NT-008 Nota 2 e Nota 3)
+        var dest = infDps.IBSCBS?.dest;
+        var destinatarioIdentificado = dest != null && (
+            !string.IsNullOrWhiteSpace(dest.CNPJ) ||
+            !string.IsNullOrWhiteSpace(dest.CPF) ||
+            !string.IsNullOrWhiteSpace(dest.NIF) ||
+            !string.IsNullOrWhiteSpace(dest.xNome));
+
+        var destinatarioEhOProprioTomador = destinatarioIdentificado && tomadorIdentificado && DocumentosIguais(
+            dest!.CNPJ, dest.CPF, dest.NIF,
+            toma?.CNPJ, toma?.CPF, toma?.NIF);
+
+        string blocoDestinatario;
+        if (!destinatarioIdentificado)
+            blocoDestinatario = BuildParticipanteNaoIdentificadoBloco("DESTINATÁRIO DA OPERAÇÃO", "DESTINATÁRIO DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e");
+        else if (destinatarioEhOProprioTomador)
+            blocoDestinatario = BuildParticipanteNaoIdentificadoBloco("DESTINATÁRIO DA OPERAÇÃO", "O DESTINATÁRIO É O PRÓPRIO TOMADOR/ADQUIRENTE DA OPERAÇÃO");
+        else
+            blocoDestinatario = BuildDestinatarioBloco(dest!, warnings);
+
+        // Bloco Intermediário da Operação (NT-008 Nota 2)
+        var interm = infDps.interm;
+        var intermediarioIdentificado = interm != null && (
+            !string.IsNullOrWhiteSpace(interm.CNPJ) ||
+            !string.IsNullOrWhiteSpace(interm.CPF) ||
+            !string.IsNullOrWhiteSpace(interm.NIF) ||
+            !string.IsNullOrWhiteSpace(interm.xNome));
+
+        string blocoIntermediario = intermediarioIdentificado
+            ? BuildIntermediarioBloco(interm!, warnings)
+            : BuildParticipanteNaoIdentificadoBloco("INTERMEDIÁRIO DA OPERAÇÃO", "INTERMEDIÁRIO DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e");
+
+        // Bloco Tributação Municipal (ISSQN) (NT-008 Nota 4)
+        int? tribISSQN = infDps.valores?.trib?.tribMun?.tribISSQN;
+        var operacaoTributavelPorIssqn = tribISSQN == 1;
+
+        string blocoTribMunicipal = operacaoTributavelPorIssqn
+            ? BuildTribMunicipalBloco(infDps, valores, municpioISSQN, tpRetIssqn, vAliqAplic, vIssqn, vServico, ptBR, warnings)
+            : BuildBlocoNaoAplicavel("TRIBUTAÇÃO MUNICIPAL (ISSQN)", "TRIBUTAÇÃO MUNICIPAL (ISSQN) - OPERAÇÃO NÃO SUJEITA AO ISSQN");
+
+        // Bloco Tributação IBS/CBS (suprimido por completo quando o grupo não existir, regra 4.7.5)
+        var ibscbsDeclarado = infDps.IBSCBS?.valores?.trib?.gIBSCBS;
+        var ibscbsApurado = inf.IBSCBS;
+        var possuiIbsCbs = ibscbsDeclarado != null || ibscbsApurado != null;
+
+        string blocoIbsCbs = possuiIbsCbs
+            ? BuildIbsCbsBloco(infDps, inf, ptBR, warnings)
+            : string.Empty;
+
+        // Totais de IBS/CBS (regra 4.7.4) — sempre reproduzidos do XML, nunca recalculados
+        decimal? vIBSTot = ibscbsApurado?.totCIBS?.gIBS?.vIBSTot;
+        decimal? vCBSTot = ibscbsApurado?.totCIBS?.gCBS?.vCBS;
+        decimal? vTotNF = ibscbsApurado?.totCIBS?.vTotNF;
+        decimal? vTotalIbsCbs = (vIBSTot.HasValue || vCBSTot.HasValue) ? (vIBSTot ?? 0M) + (vCBSTot ?? 0M) : (decimal?)null;
+
+        // Informações complementares (regra 4.8.1/4.8.2 — inclui totais aproximados dos tributos, Nota 10)
+        var infComplementares = BuildInfComplementares(infDps, inf, ptBR);
+
+        // Canhoto (opcional, NT-008 Nota 11 / regra 4.8.5)
+        string blocoCanhoto = _options.ExibirCanhoto
+            ? BuildCanhotoBloco(numeroNfse, chaveAcesso)
+            : string.Empty;
 
         // Monta mapa de placeholders (agora com warnings)
         var map = new Dictionary<string, string>
         {
-            // Cancelada
+            // Cancelada / Substituída
             ["{{NFSE_CANCELADA_DIV}}"] = canceladaDiv,
             ["{{NFSE_SUBSTITUIDA_DIV}}"] = substituidaDiv,
             // Fonts
@@ -238,13 +277,13 @@ public sealed class DanfeHtmlRenderer
             ["{{FONT_SIZE}}"] = _options.FontSize ?? "10px;",
             ["{{FONT_SIZE_HEADER}}"] = _options.FontSize ?? "12px;",
             ["{{FONT_SIZE_QRCODE}}"] = _options.FontSize ?? "10px;",
-            // Logos
-            ["{{NFSE_LOGO}}"] = logoNfse ?? TransparentPixelBase64,
-            ["{{PREFEITURA_LOGO}}"] = TransparentPixelBase64,
-            ["{{LOGO_NAME}}"] = DanfeFallback.OrDash(municipioPrestador?.LogoName, warnings, fieldName: "LogoName", path: "MunicipiosIbge.GetMunicipio(...).LogoName"),
 
-            // Cabeçalho
+            // Cabeçalho (DANFSe v2.0 — NT-008 Anexo I)
+            ["{{NFSE_LOGO}}"] = logoNfse ?? TransparentPixelBase64,
             ["{{VALIDADE_JURIDICA}}"] = validade,
+            ["{{CAB_MUNICIPIO}}"] = municipioEmitente,
+            ["{{CAB_AMBIENTE_GERADOR}}"] = GetDescricaoAmbienteGerador(inf.ambGer),
+            ["{{CAB_TIPO_AMBIENTE}}"] = isProd ? "Produção" : "Produção Restrita (Homologação)",
             ["{{CHAVE_ACESSO}}"] = DanfeFallback.OrDash(chaveAcesso, warnings, fieldName: "chaveAcesso", path: "infNFSe.Id"),
 
             // QrCode
@@ -255,33 +294,29 @@ public sealed class DanfeHtmlRenderer
             ["{{NUMERO_DPS}}"] = DanfeFallback.OrDash(numeroDps, warnings, "nDPS", "infNFSe.DPS.InfDPS.nDPS"),
             ["{{SERIE_DPS}}"] = DanfeFallback.OrDash(serieDps, warnings, "serie", "infNFSe.DPS.InfDPS.serie"),
             ["{{COMPETENCIA}}"] = competencia?.ToString("dd/MM/yyyy") ?? DanfeFallback.OrDash(null, warnings, "dCompet", "infNFSe.DPS.InfDPS.dCompet"),
-            ["{{DATA_HORA_EMISSAO}}"] = dhEmissaoNfs?.AddHours(-3).ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhProc", "infNFSe.dhProc"),
-            ["{{DATA_HORA_EMISSAO_DPS}}"] = dhEmissaoDps?.AddHours(-3).ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhEmi", "infNFSe.DPS.InfDPS.dhEmi"),
+            ["{{DATA_HORA_EMISSAO}}"] = dhEmissaoNfs?.ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhProc", "infNFSe.dhProc"),
+            ["{{DATA_HORA_EMISSAO_DPS}}"] = dhEmissaoDps?.ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhEmi", "infNFSe.DPS.InfDPS.dhEmi"),
+            ["{{EMITENTE_NFSE}}"] = GetDescricaoEmitente(infDps.tpEmit),
+            ["{{SITUACAO_NFSE}}"] = GetDescricaoSituacao(isCancelled, isReplaced),
+            ["{{FINALIDADE_NFSE}}"] = GetDescricaoFinalidade(inf.IBSCBS?.finNFSe ?? infDps.IBSCBS?.finNFSe),
 
             // Prestador
-            ["{{PREST_SERV}}"] = GetDescricaoEmitente(infDps.tpEmit),
             ["{{PREST_CNPJ}}"] = !string.IsNullOrEmpty(infDps.prest?.CPF) ? DanfeFallback.OrDash(Helper.FormatCpf(infDps.prest?.CPF), warnings, fieldName: "CNPJ Prestador", path: "infNFSe.DPS.InfDPS.prest.CPF")
                 : DanfeFallback.OrDash(Helper.FormatCnpj(infDps.prest?.CNPJ), warnings, fieldName: "CNPJ Prestador", path: "infNFSe.DPS.InfDPS.prest.CNPJ"),
             ["{{PREST_IM}}"] = DanfeFallback.OrDash(infDps.prest?.IM, warnings, "IM Prestador", "infNFSe.DPS.InfDPS.prest.IM"),
             ["{{PREST_RAZAO}}"] = DanfeFallback.OrDash(inf.emit?.xNome, warnings, "xNome Prestador", "infNFSe.emit.xNome"),
             ["{{PREST_ENDERECO}}"] = DanfeFallback.OrDash(Helper.BuildEndereco(inf.emit?.enderNac), warnings, "Endereço Prestador", "infNFSe.emit.enderNac"),
-            ["{{PREST_MUNICIPIO}}"] = DanfeFallback.OrDash($"{inf.xLocEmi} - {inf.emit?.enderNac?.UF}", warnings, "Município/UF Prestador", "infNFSe.xLocEmi | infNFSe.emit.enderNac.UF"),
+            ["{{PREST_MUNICIPIO}}"] = municipioEmitente,
             ["{{PREST_CEP}}"] = DanfeFallback.OrDash(Helper.FormatCep(inf.emit?.enderNac?.CEP), warnings, "CEP Prestador", "infNFSe.emit.enderNac.CEP"),
             ["{{PREST_FONE}}"] = DanfeFallback.OrDash(Helper.FormatTelefone(infDps.prest?.fone), warnings, "Fone Prestador", "infNFSe.DPS.InfDPS.prest.fone"),
             ["{{PREST_EMAIL}}"] = DanfeFallback.OrDash(infDps.prest?.email, warnings, "Email Prestador", "infNFSe.DPS.InfDPS.prest.email"),
             ["{{PREST_SIMPLES}}"] = GetDescricaoPrestadorSimples(infDps.prest?.regTrib?.opSimpNac),
             ["{{PREST_REGIME_SN}}"] = GetDescricaoRegimeSimples(infDps.prest?.regTrib?.regApTribSN),
 
-            // Tomador
-            ["{{TOMA_CNPJ}}"] = !string.IsNullOrEmpty(infDps.toma?.CPF) ? DanfeFallback.OrDash(Helper.FormatCpf(infDps.toma?.CPF), warnings, fieldName: "CNPJ Tomador", path: "infNFSe.DPS.InfDPS.toma.CPF")
-                : DanfeFallback.OrDash(Helper.FormatCnpj(infDps.toma?.CNPJ), warnings, "CNPJ Tomador", "infNFSe.DPS.InfDPS.toma.CNPJ"),
-            ["{{TOMA_IM}}"] = DanfeFallback.OrDash(infDps.toma?.IM),
-            ["{{TOMA_RAZAO}}"] = DanfeFallback.OrDash(infDps.toma?.xNome, warnings, "xNome Tomador", "infNFSe.DPS.InfDPS.toma.xNome"),
-            ["{{TOMA_ENDERECO}}"] = DanfeFallback.OrDash(Helper.BuildEndereco(infDps.toma?.end), warnings, "Endereço Tomador", "infNFSe.DPS.InfDPS.toma.end"),
-            ["{{TOMA_CEP}}"] = DanfeFallback.OrDash(Helper.FormatCep(infDps.toma?.end?.endNac?.CEP), warnings, "CEP Tomador", "infNFSe.DPS.InfDPS.toma.end.endNac.CEP"),
-            ["{{TOMA_CMUN}}"] = ResolveMunicipioNomeComUf(infDps.toma?.end?.endNac?.cMun, warnings, "infNFSe.DPS.InfDPS.toma.end.endNac.cMun"),
-            ["{{TOMA_EMAIL}}"] = DanfeFallback.OrDash(infDps.toma?.email, warnings, "Email Tomador", "infNFSe.DPS.InfDPS.toma.email"),
-            ["{{TOMA_FONE}}"] = DanfeFallback.OrDash(Helper.FormatTelefone(infDps.toma?.fone), warnings, "Fone Tomador", "infNFSe.DPS.InfDPS.toma.fone"),
+            // Blocos suprimíveis de participantes (Tomador / Destinatário / Intermediário)
+            ["{{BLOCO_TOMADOR}}"] = blocoTomador,
+            ["{{BLOCO_DESTINATARIO}}"] = blocoDestinatario,
+            ["{{BLOCO_INTERMEDIARIO}}"] = blocoIntermediario,
 
             // Serviço
             ["{{SERV_CTRIBNAC}}"] = DanfeFallback.OrDash(descricaoTributoNacional, warnings, "Descrição Tributo Nacional", "infNFSe.DPS.InfDPS.serv.cServ.cTribNac | infNFSe.xTribNac").Limit(80),
@@ -291,25 +326,10 @@ public sealed class DanfeHtmlRenderer
             ["{{SERV_LOCAL}}"] = DanfeFallback.OrDash(municipioPrestador?.NomeComUf, warnings, "Município Prestação", "MunicipiosIbge.GetMunicipio(cLocPrestacao).NomeComUf"),
             ["{{SERV_PAIS}}"] = DanfeFallback.OrDash(infDps.serv?.locPrest?.cPaisPrestacao, warnings, "País da Prestação", "infNFSe.DPS.InfDPS.serv.locPrest.cPaisPrestacao"),
 
-            // Tributação Municipal
-            ["{{ISS_TRIBUTACAO}}"] = GetDescricaoTributacao(infDps.valores?.trib?.tribMun?.tribISSQN),
-            //TO DO: verificar se esse pais é o de prestação ou do tomador
-            ["{{ISS_PAIS}}"] = DanfeFallback.OrDash(infDps.toma?.end?.endExt?.cPais, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.toma.end.endExt.cPais"),
-            ["{{ISS_MUN_INC}}"] = DanfeFallback.OrDash(municpioISSQN?.NomeComUf, warnings, "Município Incidência", "MunicipiosIbge.GetMunicipio(cLocIncid).NomeComUf"),
-            ["{{ISS_REGIME}}"] = GetDescricaoRegimeEspecial(infDps.prest?.regTrib?.regEspTrib),
-            ["{{ISS_OPERACAO}}"] = GetDescricaoTipoImunidade(infDps.valores?.trib?.tribMun?.tpImunidade),
-            ["{{ISS_SUSPENSAO}}"] = GetDescricaoTipoSuspensaoISSQN(infDps.valores?.trib?.tribMun?.exigSusp?.tpSusp),
-            ["{{ISS_PROCESSO}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.tribMun?.exigSusp?.nProcesso, warnings, "Número Processo Suspensão", "infNFSe.DPS.InfDPS.valores.trib.tribMun.exigSusp.nProcesso"),
-            ["{{ISS_BENEFICIO}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.tribMun?.BM?.nBM.ToString(), warnings, "Benefício Municipal", "infNFSe.DPS.InfDPS.valores.trib.tribMun.BM.nBM"),
-            ["{{ISS_DESC_INCOND}}"] = DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"),
-            ["{{ISS_DEDUCOES}}"] = DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"),
-            ["{{ISS_CALCULO}}"] = DanfeFallback.OrCurrency(infDps.valores?.trib?.tribMun?.BM?.vRedBCBM, ptBR, warnings, "vRedBCBM", "infNFSe.valores.trib.tribMun.BM.vRedBCBM"), //TO DO: verificar no futuro se Calculo do BM realmente se refere a esse campo
-            ["{{ISS_BC}}"] = vServico.ToString("C", ptBR),
-            ["{{ISS_ALIQ}}"] = DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic"),
-            ["{{ISS_RETENCAO}}"] = GetDescricaoRetencao(tpRetIssqn),
-            ["{{ISS_APURADO}}"] = DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN"),
+            // Bloco suprimível de Tributação Municipal (ISSQN)
+            ["{{BLOCO_TRIB_MUNICIPAL}}"] = blocoTribMunicipal,
 
-            // Tributação Federal
+            // Tributação Federal (exceto CBS)
             ["{{FED_IRRF}}"] = DanfeFallback.OrCurrency(vIRRF, ptBR, warnings, "vIRRF", "infDps.valores.trib.tribFed.vRetIRRF"),
             ["{{FED_PIS}}"] = DanfeFallback.OrCurrency(vPIS, ptBR, warnings, "vPIS", "infNFSe.valores.trib.tribFed.piscofins.vPis"),
             ["{{FED_COFINS}}"] = DanfeFallback.OrCurrency(vCOFINS, ptBR, warnings, "vCOFINS", "infDps.valores.trib.tribFed.piscofins.vCofins"),
@@ -318,23 +338,25 @@ public sealed class DanfeHtmlRenderer
             ["{{FED_RET_PISCOFINS}}"] = GetDescricaoTipoRetencaoPisCofins(infDps.valores?.trib?.tribFed?.piscofins?.tpRetPisCofins),
             ["{{FED_TOTAL}}"] = DanfeFallback.OrCurrency(vTotTribFed, ptBR, warnings, "vTotTribFed", "infDps.valores.trib.totTrib.vTotTrib.vTotTribFed"),
 
-            // Valores
+            // Bloco suprimível de Tributação IBS/CBS
+            ["{{BLOCO_IBSCBS}}"] = blocoIbsCbs,
+
+            // Valores / Valor Total da NFS-e
             ["{{VALOR_SERVICO}}"] = vServico.ToString("C", ptBR),
             ["{{VALOR_LIQUIDO}}"] = DanfeFallback.OrCurrency(vLiq, ptBR, warnings, "vLiq", "infNFSe.valores.vLiq"),
             ["{{DESC_COND}}"] = vDescCond != 0 ? vDescCond.ToString("C", ptBR) : "R$",
             ["{{DESC_INCOND}}"] = vDescIncond != 0 ? vDescIncond.ToString("C", ptBR) : "R$",
-            ["{{ISS_RETIDO}}"] = (tpRetIssqn == 2) ? DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN") : "-",
-            //["{{FED_RETIDOS}}"] = (tpRetIssqn == 2) ? "R$ 0,00" : "-",
-            ["{{FED_RETIDOS}}"] = vTotalRetFed == 0M ? "-" : vTotalRetFed.ToString("C", ptBR),
-            ["{{PISCOFINS_RET}}"] = vRetPisCofins != 0 ? vRetPisCofins.ToString("C", ptBR) : "-",
+            ["{{TOTAL_RETENCOES}}"] = (tpRetIssqn == 2 ? (vIssqn ?? 0M) : 0M) is var totalRet && (totalRet + vTotalRetFed + vRetPisCofins) != 0
+                ? (totalRet + vTotalRetFed + vRetPisCofins).ToString("C", ptBR)
+                : "-",
+            ["{{TOTAL_IBSCBS}}"] = vTotalIbsCbs.HasValue ? vTotalIbsCbs.Value.ToString("C", ptBR) : "-",
+            ["{{VALOR_LIQUIDO_IBSCBS}}"] = vTotNF.HasValue ? vTotNF.Value.ToString("C", ptBR) : "-",
 
-            // Totais tributos
-            ["{{TOT_FED}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.totTrib?.pTotTrib?.pTotTribFed.ToString(CultureInfo.InvariantCulture)),
-            ["{{TOT_EST}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.totTrib?.pTotTrib?.pTotTribEst.ToString(CultureInfo.InvariantCulture)),
-            ["{{TOT_MUN}}"] = DanfeFallback.OrDash(infDps.valores?.trib?.totTrib?.pTotTrib?.pTotTribMun.ToString(CultureInfo.InvariantCulture)),
+            // Informações complementares (inclui Totais Aproximados dos Tributos — Nota 10, obrigatório)
+            ["{{INF_COMPLEMENTARES}}"] = infComplementares,
 
-            // Inf complementares
-            ["{{INF_COMPLEMENTARES}}"] = Helper.BuildInfComplementares(infDps.serv, infDps.subst, outInf)
+            // Canhoto (opcional)
+            ["{{BLOCO_CANHOTO}}"] = blocoCanhoto,
         };
 
         // Aplica os replaces
@@ -343,9 +365,14 @@ public sealed class DanfeHtmlRenderer
             bool isRawHtml =
                 kv.Key == "{{SERV_DESC_HTML}}" ||
                 kv.Key == "{{INF_COMPLEMENTARES}}" ||
-                kv.Key == "{{LOGO_NAME}}" ||
                 kv.Key == "{{NFSE_CANCELADA_DIV}}" ||
-                kv.Key == "{{NFSE_SUBSTITUIDA_DIV}}";
+                kv.Key == "{{NFSE_SUBSTITUIDA_DIV}}" ||
+                kv.Key == "{{BLOCO_TOMADOR}}" ||
+                kv.Key == "{{BLOCO_DESTINATARIO}}" ||
+                kv.Key == "{{BLOCO_INTERMEDIARIO}}" ||
+                kv.Key == "{{BLOCO_TRIB_MUNICIPAL}}" ||
+                kv.Key == "{{BLOCO_IBSCBS}}" ||
+                kv.Key == "{{BLOCO_CANHOTO}}";
 
             string value = isRawHtml ? kv.Value : Helper.HtmlEncode(kv.Value);
             template = template.Replace(kv.Key, value ?? string.Empty);
@@ -362,6 +389,395 @@ public sealed class DanfeHtmlRenderer
         }
 
         return (template, warnings.Warnings);
+    }
+
+    // Marca d'água diagonal de CANCELADA/SUBSTITUÍDA (NT-008 2.5.1/2.5.2: mínimo 50pt, Arial, cinza K35).
+    private static string BuildMarcaDagua(string texto) =>
+        $@"<div style=""
+              position:absolute;
+              top:50%;
+              left:50%;
+              display:inline-block;
+              -webkit-transform: translate(-50%, -50%) rotate(-30deg);
+              transform: translate(-50%, -50%) rotate(-30deg);
+              -webkit-transform-origin: 50% 50%;
+              transform-origin: 50% 50%;
+              font-family: Arial, sans-serif;
+              font-size:96px;
+              font-weight:800;
+              color: rgba(140,140,140,0.55);
+              text-transform:uppercase;
+              z-index:-9999;
+              pointer-events:none;
+              white-space:nowrap;"">
+                          {texto}
+              </div>";
+
+    // Bloco "X NÃO IDENTIFICADO NA NFS-e" / "O DESTINATÁRIO É O PRÓPRIO TOMADOR..." (NT-008 Notas 2 e 3).
+    private static string BuildParticipanteNaoIdentificadoBloco(string titulo, string mensagem) =>
+        $@"<div class=""section"" style=""border-bottom: none; text-align: center; font-size: 13px; font-weight: bold; padding: 4px 6px;"">
+            <span>{Helper.HtmlEncode(mensagem)}</span>
+          </div>";
+
+    // Bloco de substituição quando o bloco não se aplica à operação (ex.: ISSQN não incidente — NT-008 Nota 4).
+    private static string BuildBlocoNaoAplicavel(string titulo, string mensagem) =>
+        $@"<div class=""section"" style=""border-bottom: none; text-align: center; font-size: 13px; font-weight: bold; padding: 4px 6px;"">
+            <span>{Helper.HtmlEncode(mensagem)}</span>
+          </div>";
+
+    private static bool DocumentosIguais(string? cnpjA, string? cpfA, string? nifA, string? cnpjB, string? cpfB, string? nifB)
+    {
+        if (!string.IsNullOrWhiteSpace(cnpjA) && !string.IsNullOrWhiteSpace(cnpjB))
+            return string.Equals(cnpjA, cnpjB, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(cpfA) && !string.IsNullOrWhiteSpace(cpfB))
+            return string.Equals(cpfA, cpfB, StringComparison.OrdinalIgnoreCase);
+        if (!string.IsNullOrWhiteSpace(nifA) && !string.IsNullOrWhiteSpace(nifB))
+            return string.Equals(nifA, nifB, StringComparison.OrdinalIgnoreCase);
+        return false;
+    }
+
+    private static string BuildTomadorBloco(Tomador toma, DanfeWarningCollector warnings, CultureInfo ptBR)
+    {
+        var cnpjCpfNif = !string.IsNullOrEmpty(toma.CPF) ? Helper.FormatCpf(toma.CPF)
+            : !string.IsNullOrEmpty(toma.NIF) ? toma.NIF
+            : Helper.FormatCnpj(toma.CNPJ);
+
+        return BuildParticipanteBloco(
+            "TOMADOR/ADQUIRENTE DA OPERAÇÃO",
+            DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Tomador", "infNFSe.DPS.InfDPS.toma"),
+            DanfeFallback.OrDash(toma.IM),
+            DanfeFallback.OrDash(Helper.FormatTelefone(toma.fone)),
+            DanfeFallback.OrDash(toma.xNome, warnings, "xNome Tomador", "infNFSe.DPS.InfDPS.toma.xNome"),
+            DanfeFallback.OrDash(Helper.BuildEndereco(toma.end), warnings, "Endereço Tomador", "infNFSe.DPS.InfDPS.toma.end"),
+            ResolveMunicipioComUf(toma.end, warnings, "infNFSe.DPS.InfDPS.toma.end"),
+            ResolveCepOuCEndPost(toma.end),
+            DanfeFallback.OrDash(toma.email));
+    }
+
+    private static string BuildDestinatarioBloco(dest destinatario, DanfeWarningCollector warnings)
+    {
+        var cnpjCpfNif = !string.IsNullOrEmpty(destinatario.CPF) ? Helper.FormatCpf(destinatario.CPF)
+            : !string.IsNullOrEmpty(destinatario.NIF) ? destinatario.NIF
+            : Helper.FormatCnpj(destinatario.CNPJ);
+
+        return BuildParticipanteBloco(
+            "DESTINATÁRIO DA OPERAÇÃO",
+            DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest"),
+            null,
+            DanfeFallback.OrDash(Helper.FormatTelefone(destinatario.fone)),
+            DanfeFallback.OrDash(destinatario.xNome, warnings, "xNome Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.xNome"),
+            DanfeFallback.OrDash(Helper.BuildEndereco(destinatario.end), warnings, "Endereço Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.end"),
+            ResolveMunicipioComUf(destinatario.end, warnings, "infNFSe.DPS.InfDPS.IBSCBS.dest.end"),
+            ResolveCepOuCEndPost(destinatario.end),
+            DanfeFallback.OrDash(destinatario.email));
+    }
+
+    private static string BuildIntermediarioBloco(Intermediario intermediario, DanfeWarningCollector warnings)
+    {
+        var cnpjCpfNif = !string.IsNullOrEmpty(intermediario.CPF) ? Helper.FormatCpf(intermediario.CPF)
+            : !string.IsNullOrEmpty(intermediario.NIF) ? intermediario.NIF
+            : Helper.FormatCnpj(intermediario.CNPJ);
+
+        return BuildParticipanteBloco(
+            "INTERMEDIÁRIO DA OPERAÇÃO",
+            DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Intermediário", "infNFSe.DPS.InfDPS.interm"),
+            DanfeFallback.OrDash(intermediario.IM),
+            DanfeFallback.OrDash(Helper.FormatTelefone(intermediario.fone)),
+            DanfeFallback.OrDash(intermediario.xNome, warnings, "xNome Intermediário", "infNFSe.DPS.InfDPS.interm.xNome"),
+            DanfeFallback.OrDash(Helper.BuildEndereco(intermediario.end), warnings, "Endereço Intermediário", "infNFSe.DPS.InfDPS.interm.end"),
+            ResolveMunicipioComUf(intermediario.end, warnings, "infNFSe.DPS.InfDPS.interm.end"),
+            ResolveCepOuCEndPost(intermediario.end),
+            DanfeFallback.OrDash(intermediario.email));
+    }
+
+    private static string BuildParticipanteBloco(
+        string titulo, string cnpjCpfNif, string? im, string fone, string nome, string endereco, string municipioUf, string cep, string email)
+    {
+        var imLinha = im != null
+            ? $@"<td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Indicador Municipal (Inscrição)</span><br />{im}</td>"
+            : @"<td style=""vertical-align: top; width: 25%""></td>";
+
+        return $@"
+          <div class=""section"">
+            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+              <table style=""width: 100%; border-collapse: collapse"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-size: 12px; font-weight: bold"">{titulo}</span></td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">CNPJ / CPF / NIF</span><br />{cnpjCpfNif}</td>
+                  {imLinha}
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Telefone</span><br />{fone}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Nome / Nome Empresarial</span><br />{nome}</td>
+                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">E-mail</span><br />{email}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">*Endereço</span><br />{endereco}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Município / Sigla UF</span><br />{municipioUf}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Código IBGE / CEP</span><br />{cep}</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <div style=""border-top: 1px solid #000; margin: 0 5px""></div>";
+    }
+
+    private static string ResolveMunicipioComUf(EndSimples? end, DanfeWarningCollector warnings, string path)
+    {
+        if (end?.endNac != null)
+            return ResolveMunicipioNomeComUf(end.endNac.cMun, warnings, path + ".endNac.cMun");
+        if (end?.endExt != null)
+            return DanfeFallback.OrDash($"{end.endExt.xCidade} - {end.endExt.xEstProvReg}", warnings, "Cidade/Estado exterior", path + ".endExt");
+        warnings.FieldMissing("endNac/endExt", path, "-");
+        return "-";
+    }
+
+    private static string ResolveCepOuCEndPost(EndSimples? end)
+    {
+        if (end?.endNac != null)
+            return Helper.FormatCep(end.endNac.CEP);
+        if (end?.endExt != null)
+            return DanfeFallback.OrDash(end.endExt.cEndPost);
+        return "-";
+    }
+
+    private static string BuildTribMunicipalBloco(
+        InfDPS infDps, ValoresNfse? valores, MunicipiosIbge.Municipio? municpioISSQN,
+        int? tpRetIssqn, decimal? vAliqAplic, decimal? vIssqn, decimal vServico, CultureInfo ptBR, DanfeWarningCollector warnings)
+    {
+        var tribMun = infDps.valores?.trib?.tribMun;
+
+        var issTributacao = HtmlHelperEncode(GetDescricaoTributacao(tribMun?.tribISSQN));
+        var issPais = HtmlHelperEncode(DanfeFallback.OrDash(infDps.toma?.end?.endExt?.cPais, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.toma.end.endExt.cPais"));
+        var issMunInc = HtmlHelperEncode(DanfeFallback.OrDash(municpioISSQN?.NomeComUf, warnings, "Município Incidência", "MunicipiosIbge.GetMunicipio(cLocIncid).NomeComUf"));
+        var issRegime = HtmlHelperEncode(GetDescricaoRegimeEspecial(infDps.prest?.regTrib?.regEspTrib));
+        var issOperacao = HtmlHelperEncode(GetDescricaoTipoImunidade(tribMun?.tpImunidade));
+        var issSuspensao = HtmlHelperEncode(GetDescricaoTipoSuspensaoISSQN(tribMun?.exigSusp?.tpSusp));
+        var issProcesso = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.exigSusp?.nProcesso, warnings, "Número Processo Suspensão", "infNFSe.DPS.InfDPS.valores.trib.tribMun.exigSusp.nProcesso"));
+        var issBeneficio = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.BM?.nBM.ToString(), warnings, "Benefício Municipal", "infNFSe.DPS.InfDPS.valores.trib.tribMun.BM.nBM"));
+        var issDescIncond = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"));
+        var issDeducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"));
+        var issCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(tribMun?.BM?.vRedBCBM, ptBR, warnings, "vRedBCBM", "infNFSe.valores.trib.tribMun.BM.vRedBCBM"));
+        var issBc = HtmlHelperEncode(vServico.ToString("C", ptBR));
+        var issAliq = HtmlHelperEncode(DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic"));
+        var issRetencao = HtmlHelperEncode(GetDescricaoRetencao(tpRetIssqn));
+        var issApurado = HtmlHelperEncode(DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN"));
+
+        return $@"
+          <div class=""section"">
+            <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">TRIBUTAÇÃO MUNICIPAL (ISSQN)</div>
+            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+              <table style=""width: 100%; border-collapse: collapse"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Tipo de Tributação do ISSQN</span><br />{issTributacao}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">País Resultado da Prestação do Serviço</span><br />{issPais}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Município de Incidência do ISSQN</span><br />{issMunInc}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Regime Especial de Tributação</span><br />{issRegime}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Tipo de Imunidade</span><br />{issOperacao}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Suspensão da Exigibilidade do ISSQN</span><br />{issSuspensao}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Número Processo Suspensão</span><br />{issProcesso}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Benefício Municipal</span><br />{issBeneficio}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Desconto Incondicionado</span><br />{issDescIncond}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Total Deduções/Reduções</span><br />{issDeducoes}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Cálculo do BM</span><br />{issCalculo}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">BC ISSQN</span><br />{issBc}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota Aplicada</span><br />{issAliq}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Retenção do ISSQN</span><br />{issRetencao}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">ISSQN Apurado</span><br />{issApurado}</td>
+                  <td style=""vertical-align: top; width: 25%""></td>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <div style=""border-top: 1px solid #000; margin: 0 5px""></div>";
+    }
+
+    private static string BuildIbsCbsBloco(InfDPS infDps, InfNFSe inf, CultureInfo ptBR, DanfeWarningCollector warnings)
+    {
+        var gIBSCBS = infDps.IBSCBS?.valores?.trib?.gIBSCBS;
+        var apurado = inf.IBSCBS;
+        var valoresApurados = apurado?.valores;
+
+        var cstCClassTrib = HtmlHelperEncode(DanfeFallback.OrDash(
+            !string.IsNullOrWhiteSpace(gIBSCBS?.CST) || !string.IsNullOrWhiteSpace(gIBSCBS?.cClassTrib)
+                ? $"{gIBSCBS?.CST} / {gIBSCBS?.cClassTrib}"
+                : null,
+            warnings, "CST/cClassTrib", "infNFSe.DPS.InfDPS.valores.trib.gIBSCBS"));
+
+        var indicadorOperacao = HtmlHelperEncode(DanfeFallback.OrDash(apurado?.cIndOp, warnings, "Indicador de Operação", "infNFSe.IBSCBS.cIndOp"));
+        var municipioIncidencia = HtmlHelperEncode(DanfeFallback.OrDash(
+            !string.IsNullOrWhiteSpace(apurado?.xLocalidadeIncid) ? apurado!.xLocalidadeIncid : null,
+            warnings, "Município Incidência IBS/CBS", "infNFSe.IBSCBS.cLocalidadeIncid/xLocalidadeIncid"));
+
+        var exclusoesReducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(valoresApurados?.vCalcReeRepRes, ptBR, warnings, "vCalcReeRepRes", "infNFSe.IBSCBS.valores.vCalcReeRepRes"));
+        var baseCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(valoresApurados?.vBC, ptBR, warnings, "vBC", "infNFSe.IBSCBS.valores.vBC"));
+
+        var redAliquotas = HtmlHelperEncode(FormatTresPercentuais(
+            valoresApurados?.uf?.pRedAliqUF, valoresApurados?.mun?.pRedAliqMun, valoresApurados?.fed?.pRedAliqCBS, ptBR));
+        var aliqIbsUfMun = HtmlHelperEncode(FormatDoisPercentuais(valoresApurados?.uf?.pIBSUF, valoresApurados?.mun?.pIBSMun, ptBR));
+        var aliqEfetivaMun = HtmlHelperEncode(DanfeFallback.OrPercent(valoresApurados?.mun?.pAliqEfetMun, ptBR, warnings, "pAliqEfetMun", "infNFSe.IBSCBS.valores.mun.pAliqEfetMun"));
+        var valorApuradoMun = HtmlHelperEncode(DanfeFallback.OrCurrency(apurado?.totCIBS?.gIBS?.gIBSMunTot?.vIBSMun, ptBR, warnings, "vIBSMun", "infNFSe.IBSCBS.totCIBS.gIBS.gIBSMunTot.vIBSMun"));
+        var aliqEfetivaUf = HtmlHelperEncode(DanfeFallback.OrPercent(valoresApurados?.uf?.pAliqEfetUF, ptBR, warnings, "pAliqEfetUF", "infNFSe.IBSCBS.valores.uf.pAliqEfetUF"));
+        var valorApuradoUf = HtmlHelperEncode(DanfeFallback.OrCurrency(apurado?.totCIBS?.gIBS?.gIBSUFTot?.vIBSUF, ptBR, warnings, "vIBSUF", "infNFSe.IBSCBS.totCIBS.gIBS.gIBSUFTot.vIBSUF"));
+        var valorTotalIbs = HtmlHelperEncode(DanfeFallback.OrCurrency(apurado?.totCIBS?.gIBS?.vIBSTot, ptBR, warnings, "vIBSTot", "infNFSe.IBSCBS.totCIBS.gIBS.vIBSTot"));
+        var aliqCbs = HtmlHelperEncode(DanfeFallback.OrPercent(valoresApurados?.fed?.pCBS, ptBR, warnings, "pCBS", "infNFSe.IBSCBS.valores.fed.pCBS"));
+        var aliqEfetivaCbs = HtmlHelperEncode(DanfeFallback.OrPercent(valoresApurados?.fed?.pAliqEfetCBS, ptBR, warnings, "pAliqEfetCBS", "infNFSe.IBSCBS.valores.fed.pAliqEfetCBS"));
+        var valorTotalCbs = HtmlHelperEncode(DanfeFallback.OrCurrency(apurado?.totCIBS?.gCBS?.vCBS, ptBR, warnings, "vCBS", "infNFSe.IBSCBS.totCIBS.gCBS.vCBS"));
+
+        return $@"
+          <div class=""section"">
+            <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">TRIBUTAÇÃO IBS / CBS</div>
+            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+              <table style=""width: 100%; border-collapse: collapse"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">CST / cClassTrib</span><br />{cstCClassTrib}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Indicador de Operação</span><br />{indicadorOperacao}</td>
+                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Código IBGE Incidência / Município Incidência / Sigla UF</span><br />{municipioIncidencia}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Exclusões e Reduções da Base de Cálculo</span><br />{exclusoesReducoes}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Base de Cálculo Após Exclusões e Reduções</span><br />{baseCalculo}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Red. Alíquota IBS UF / IBS Mun / CBS</span><br />{redAliquotas}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota IBS UF / IBS Mun</span><br />{aliqIbsUfMun}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíq. Efetiva Municipal - IBS</span><br />{aliqEfetivaMun}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Apurado Municipal - IBS</span><br />{valorApuradoMun}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíq. Efetiva Estadual - IBS</span><br />{aliqEfetivaUf}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Apurado Estadual - IBS</span><br />{valorApuradoUf}</td>
+                </tr>
+              </table>
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+                <tr>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Total Apurado - IBS</span><br />{valorTotalIbs}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota - CBS</span><br />{aliqCbs}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota Efetiva - CBS</span><br />{aliqEfetivaCbs}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Total Apurado - CBS</span><br />{valorTotalCbs}</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+          <div style=""border-top: 1px solid #000; margin: 0 5px""></div>";
+    }
+
+    private static string FormatDoisPercentuais(decimal? a, decimal? b, CultureInfo ptBR)
+    {
+        if (!a.HasValue && !b.HasValue) return "-";
+        return $"{a?.ToString("N2", ptBR) ?? "-"}% / {b?.ToString("N2", ptBR) ?? "-"}%";
+    }
+
+    private static string FormatTresPercentuais(decimal? a, decimal? b, decimal? c, CultureInfo ptBR)
+    {
+        if (!a.HasValue && !b.HasValue && !c.HasValue) return "-";
+        return $"{a?.ToString("N2", ptBR) ?? "-"}% / {b?.ToString("N2", ptBR) ?? "-"}% / {c?.ToString("N2", ptBR) ?? "-"}%";
+    }
+
+    private static string HtmlHelperEncode(string value) => Helper.HtmlEncode(value);
+
+    // Canhoto opcional (NT-008 Nota 11) — bloco de ciência do recebimento.
+    private static string BuildCanhotoBloco(string numeroNfse, string chaveAcesso) => $@"
+      <div style=""border-top: 1px solid #000; margin: 0 5px""></div>
+      <div class=""section"" style=""border-bottom: none;"">
+        <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">CANHOTO</div>
+        <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+          <table style=""width: 100%; border-collapse: collapse"">
+            <tr>
+              <td style=""vertical-align: top; width: 33%""><span class=""label"" style=""font-weight: bold"">Data Cientificação</span><br />&nbsp;</td>
+              <td style=""vertical-align: top; width: 34%""><span class=""label"" style=""font-weight: bold"">Identificação e Assinatura</span><br />&nbsp;</td>
+              <td style=""vertical-align: top; width: 33%"">
+                <span class=""label"" style=""font-weight: bold"">Nº NFS-e / Chave NFS-e</span><br />
+                {Helper.HtmlEncode(numeroNfse)} / {Helper.HtmlEncode(chaveAcesso)}
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>";
+
+    // Informações complementares — ordem e rótulos conforme NT-008 §2.4.5 (Informações Complementares)
+    // e Nota 10 (totais aproximados dos tributos, obrigatório em toda NFS-e).
+    private static string BuildInfComplementares(InfDPS infDps, InfNFSe inf, CultureInfo ptBR)
+    {
+        var segmentos = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.xInfComp))
+            segmentos.Add($"<b>Inf. Cont.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.xInfComp!)}");
+
+        if (infDps.subst != null)
+            segmentos.Add($"<b>NFS-e Subst.:</b> {Helper.HtmlEncode(infDps.subst.chSubstda ?? string.Empty)}");
+
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.docRef))
+            segmentos.Add($"<b>Doc. Ref.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.docRef!)}");
+
+        if (infDps.serv?.obra != null)
+            segmentos.Add($"<b>Cod. Obra:</b> {Helper.HtmlEncode(infDps.serv.obra.cObra ?? "-")}");
+
+        if (infDps.IBSCBS?.imovel != null)
+            segmentos.Add($"<b>Insc. Imob.:</b> {Helper.HtmlEncode(infDps.IBSCBS.imovel.inscImobFisc ?? "-")}");
+
+        if (infDps.serv?.atvEvento != null)
+            segmentos.Add($"<b>Cod. Evt.:</b> {Helper.HtmlEncode(infDps.serv.atvEvento.idAtvEvt ?? "-")}");
+
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.idDocTec))
+            segmentos.Add($"<b>Doc. Tec.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.idDocTec!)}");
+
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.xPed))
+            segmentos.Add($"<b>Núm. Ped.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.xPed!)}");
+
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.xItemPed))
+            segmentos.Add($"<b>Item Ped.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.xItemPed!)}");
+
+        if (!string.IsNullOrWhiteSpace(inf.valores?.xOutInf))
+            segmentos.Add($"<b>Inf. A. T. Mun.:</b> {Helper.HtmlEncode(inf.valores!.xOutInf!)}");
+
+        // Nota 10: totais aproximados dos tributos — obrigatório, monetário OU percentual (nunca ambos, nunca recalculado).
+        segmentos.Add(BuildTotaisAproximadosTributos(infDps, ptBR));
+
+        return string.Join(" | ", segmentos);
+    }
+
+    private static string BuildTotaisAproximadosTributos(InfDPS infDps, CultureInfo ptBR)
+    {
+        var totTrib = infDps.valores?.trib?.totTrib;
+
+        string fed, est, mun;
+        if (totTrib?.vTotTrib != null)
+        {
+            fed = totTrib.vTotTrib.vTotTribFed.ToString("C", ptBR);
+            est = totTrib.vTotTrib.vTotTribEst.ToString("C", ptBR);
+            mun = totTrib.vTotTrib.vTotTribMun.ToString("C", ptBR);
+        }
+        else if (totTrib?.pTotTrib != null)
+        {
+            fed = $"{totTrib.pTotTrib.pTotTribFed.ToString("N2", ptBR)}%";
+            est = $"{totTrib.pTotTrib.pTotTribEst.ToString("N2", ptBR)}%";
+            mun = $"{totTrib.pTotTrib.pTotTribMun.ToString("N2", ptBR)}%";
+        }
+        else
+        {
+            fed = est = mun = "-";
+        }
+
+        return $"<b>Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012:</b> Federais: {fed}; Estaduais: {est}; Municipais: {mun}";
     }
 
     // Helper local: resolve município do tomador sem explodir e com warning
@@ -383,7 +799,7 @@ public sealed class DanfeHtmlRenderer
         return DanfeFallback.OrDash(mun.NomeComUf, warnings, "NomeComUf", path);
     }
 
-    private string GetDescricaoRetencao(int? tpRetISSQN)
+    private static string GetDescricaoRetencao(int? tpRetISSQN)
     {
         switch (tpRetISSQN)
         {
@@ -398,7 +814,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoTipoRetencaoPisCofins(int? tpRetPisCofins)
+    private static string GetDescricaoTipoRetencaoPisCofins(int? tpRetPisCofins)
     {
         /*
            Tipo de retenção ao do PIS/COFINS:
@@ -423,7 +839,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoTributacao(int? tribISSQN)
+    private static string GetDescricaoTributacao(int? tribISSQN)
     {
         switch (tribISSQN)
         {
@@ -440,7 +856,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoEmitente(int tpEmis)
+    private static string GetDescricaoEmitente(int tpEmis)
     {
         switch (tpEmis)
         {
@@ -455,7 +871,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoPrestadorSimples(int? opSimpNac)
+    private static string GetDescricaoPrestadorSimples(int? opSimpNac)
     {
         switch (opSimpNac)
         {
@@ -469,7 +885,7 @@ public sealed class DanfeHtmlRenderer
                 return "-";
         }
     }
-    private string GetDescricaoRegimeSimples(int? regApTribSN)
+    private static string GetDescricaoRegimeSimples(int? regApTribSN)
     {
         /*
           Opção para que o contribuinte optante pelo Simples Nacional ME/EPP (opSimpNac = 3) possa indicar, ao emitir o documento fiscal, em qual regime de apuração os tributos federais e municipal estão inseridos, caso tenha ultrapassado algum sublimite ou limite definido para o Simples Nacional.
@@ -489,7 +905,7 @@ public sealed class DanfeHtmlRenderer
                 return "-";
         }
     }
-    private string GetDescricaoRegimeEspecial(int? regEspTrib)
+    private static string GetDescricaoRegimeEspecial(int? regEspTrib)
     {
         /*
            Tipos de Regimes Especiais de Tributação:
@@ -522,7 +938,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoTipoImunidade(int? tpImunidade)
+    private static string GetDescricaoTipoImunidade(int? tpImunidade)
     {
         /*
            Tipos de Imunidades municipais:
@@ -552,7 +968,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private string GetDescricaoTipoSuspensaoISSQN(int? tpSusp)
+    private static string GetDescricaoTipoSuspensaoISSQN(int? tpSusp)
     {
         /*
            Opção para Exigibilidade Suspensa:
@@ -568,6 +984,54 @@ public sealed class DanfeHtmlRenderer
                 return "Suspensa por Decisão Judicial";
             case 2:
                 return "Suspensa por Processo Administrativo";
+            default:
+                return "-";
+        }
+    }
+
+    private static string GetDescricaoSituacao(bool isCancelled, bool isReplaced)
+    {
+        if (isCancelled) return "Cancelada";
+        if (isReplaced) return "Substituída";
+        return "Regular";
+    }
+
+    private static string GetDescricaoFinalidade(long? finNFSe)
+    {
+        /*
+           Finalidade da emissão da NFS-e (leiaute nacional):
+            1 - NFS-e normal;
+            2 - NFS-e complementar;
+            3 - NFS-e de ajuste;
+            4 - NFS-e de Decisão Judicial ou Administrativa.
+         */
+        switch (finNFSe)
+        {
+            case 1:
+                return "NFS-e Normal";
+            case 2:
+                return "NFS-e Complementar";
+            case 3:
+                return "NFS-e de Ajuste";
+            case 4:
+                return "NFS-e de Decisão Judicial ou Administrativa";
+            default:
+                return "-";
+        }
+    }
+
+    // NOTA: descrição best-effort com base em documentação pública do Sistema Nacional NFS-e;
+    // confirmar contra o XSD/manual oficial da DPS antes de publicar em produção.
+    private static string GetDescricaoAmbienteGerador(long ambGer)
+    {
+        switch (ambGer)
+        {
+            case 1:
+                return "Sistema Próprio do Município";
+            case 2:
+                return "Sistema Nacional (Sefin Nacional)";
+            case 3:
+                return "Ambiente Nacional (ADN)";
             default:
                 return "-";
         }

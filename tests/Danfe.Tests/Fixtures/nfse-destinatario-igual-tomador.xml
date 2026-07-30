@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+  <infNFSe Id="NFS35000000044444444000166000000000000000000000000003">
+    <xLocEmi>Santos</xLocEmi>
+    <xLocPrestacao>Santos</xLocPrestacao>
+    <nNFSe>9003</nNFSe>
+    <cLocIncid>3548500</cLocIncid>
+    <xLocIncid>Santos</xLocIncid>
+    <xTribNac>Serviços de armazenagem</xTribNac>
+    <xNBS>Serviços de armazenagem e logística</xNBS>
+    <verAplic>TesteFixture_1.0.0</verAplic>
+    <ambGer>1</ambGer>
+    <tpEmis>1</tpEmis>
+    <procEmi>2</procEmi>
+    <cStat>100</cStat>
+    <dhProc>2026-06-15T11:15:00-03:00</dhProc>
+    <nDFSe>3</nDFSe>
+    <emit>
+      <CNPJ>44444444000166</CNPJ>
+      <xNome>PRESTADORA DE ARMAZENAGEM DE TESTE LTDA</xNome>
+      <enderNac>
+        <xLgr>AV PORTUARIA</xLgr>
+        <nro>10</nro>
+        <xBairro>PORTO</xBairro>
+        <cMun>3548500</cMun>
+        <UF>SP</UF>
+        <CEP>11000000</CEP>
+      </enderNac>
+      <fone>1320000000</fone>
+      <email>contato@armazenagemteste.com.br</email>
+    </emit>
+    <valores>
+      <vBC>2000.00</vBC>
+      <pAliqAplic>3.00</pAliqAplic>
+      <vISSQN>60.00</vISSQN>
+      <vLiq>1940.00</vLiq>
+    </valores>
+    <DPS versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+      <infDPS Id="DPS35485000044444444000166000000000000000000000003">
+        <tpAmb>1</tpAmb>
+        <dhEmi>2026-06-15T11:14:50-03:00</dhEmi>
+        <verAplic>TesteFixture_1.0.0</verAplic>
+        <serie>1</serie>
+        <nDPS>3</nDPS>
+        <dCompet>2026-06-15</dCompet>
+        <tpEmit>1</tpEmit>
+        <cLocEmi>3548500</cLocEmi>
+        <prest>
+          <CNPJ>44444444000166</CNPJ>
+          <fone>1320000000</fone>
+          <email>contato@armazenagemteste.com.br</email>
+          <regTrib>
+            <opSimpNac>1</opSimpNac>
+            <regEspTrib>0</regEspTrib>
+          </regTrib>
+        </prest>
+        <toma>
+          <CNPJ>55555555000177</CNPJ>
+          <xNome>TOMADORA E DESTINATARIA DE TESTE LTDA</xNome>
+          <end>
+            <endNac>
+              <cMun>3548500</cMun>
+              <CEP>11500000</CEP>
+            </endNac>
+            <xLgr>RUA DA TOMADORA</xLgr>
+            <nro>400</nro>
+            <xBairro>VILA TOMADORA</xBairro>
+          </end>
+          <fone>1330000000</fone>
+          <email>compras@tomadoradestinataria.com.br</email>
+        </toma>
+        <serv>
+          <locPrest>
+            <cLocPrestacao>3548500</cLocPrestacao>
+            <cPaisPrestacao>BR</cPaisPrestacao>
+          </locPrest>
+          <cServ>
+            <cTribNac>110301</cTribNac>
+            <xDescServ>Armazenagem de mercadorias em terminal alfandegado.</xDescServ>
+            <cNBS>140010100</cNBS>
+          </cServ>
+        </serv>
+        <valores>
+          <vServPrest>
+            <vServ>2000.00</vServ>
+          </vServPrest>
+          <trib>
+            <tribMun>
+              <tribISSQN>1</tribISSQN>
+              <tpRetISSQN>2</tpRetISSQN>
+            </tribMun>
+          </trib>
+        </valores>
+        <IBSCBS>
+          <dest>
+            <CNPJ>55555555000177</CNPJ>
+            <xNome>TOMADORA E DESTINATARIA DE TESTE LTDA</xNome>
+            <end>
+              <endNac>
+                <cMun>3548500</cMun>
+                <CEP>11500000</CEP>
+              </endNac>
+              <xLgr>RUA DA TOMADORA</xLgr>
+              <nro>400</nro>
+              <xBairro>VILA TOMADORA</xBairro>
+            </end>
+            <fone>1330000000</fone>
+            <email>compras@tomadoradestinataria.com.br</email>
+          </dest>
+        </IBSCBS>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>

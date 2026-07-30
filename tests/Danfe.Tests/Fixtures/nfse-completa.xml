@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+  <infNFSe Id="NFS35000000011111111000191000000000000000000000000001">
+    <xLocEmi>São Paulo</xLocEmi>
+    <xLocPrestacao>São Paulo</xLocPrestacao>
+    <nNFSe>9001</nNFSe>
+    <cLocIncid>3550308</cLocIncid>
+    <xLocIncid>São Paulo</xLocIncid>
+    <xTribNac>Serviços de consultoria em tecnologia da informação</xTribNac>
+    <xTribMun>ISS sobre serviços técnicos</xTribMun>
+    <xNBS>Serviços de consultoria em tecnologia da informação</xNBS>
+    <verAplic>TesteFixture_1.0.0</verAplic>
+    <ambGer>3</ambGer>
+    <tpEmis>1</tpEmis>
+    <procEmi>2</procEmi>
+    <cStat>100</cStat>
+    <dhProc>2026-05-10T09:30:00-03:00</dhProc>
+    <nDFSe>1</nDFSe>
+    <emit>
+      <CNPJ>11111111000191</CNPJ>
+      <xNome>PRESTADORA DE SERVICOS DE TESTE LTDA</xNome>
+      <enderNac>
+        <xLgr>RUA DOS TESTES</xLgr>
+        <nro>100</nro>
+        <xBairro>CENTRO</xBairro>
+        <cMun>3550308</cMun>
+        <UF>SP</UF>
+        <CEP>01000000</CEP>
+      </enderNac>
+      <fone>1130000000</fone>
+      <email>contato@prestadorateste.com.br</email>
+    </emit>
+    <valores>
+      <vBC>1000.00</vBC>
+      <pAliqAplic>5.00</pAliqAplic>
+      <vISSQN>50.00</vISSQN>
+      <vLiq>950.00</vLiq>
+    </valores>
+    <IBSCBS>
+      <finNFSe>1</finNFSe>
+      <indFinal>1</indFinal>
+      <cIndOp>1</cIndOp>
+      <cLocalidadeIncid>3550308</cLocalidadeIncid>
+      <xLocalidadeIncid>São Paulo - SP</xLocalidadeIncid>
+      <tpOper>1</tpOper>
+      <tpEnteGov>0</tpEnteGov>
+      <indDest>1</indDest>
+      <valores>
+        <vCalcReeRepRes>0.00</vCalcReeRepRes>
+        <vBC>1000.00</vBC>
+        <uf>
+          <pRedAliqUF>0.00</pRedAliqUF>
+          <pIBSUF>1.00</pIBSUF>
+          <pAliqEfetUF>1.00</pAliqEfetUF>
+        </uf>
+        <mun>
+          <pRedAliqMun>0.00</pRedAliqMun>
+          <pIBSMun>0.50</pIBSMun>
+          <pAliqEfetMun>0.50</pAliqEfetMun>
+        </mun>
+        <fed>
+          <pRedAliqCBS>0.00</pRedAliqCBS>
+          <pCBS>0.90</pCBS>
+          <pAliqEfetCBS>0.90</pAliqEfetCBS>
+        </fed>
+      </valores>
+      <totCIBS>
+        <gIBS>
+          <vIBSTot>15.00</vIBSTot>
+          <gIBSMunTot>
+            <vIBSMun>5.00</vIBSMun>
+          </gIBSMunTot>
+          <gIBSUFTot>
+            <vIBSUF>10.00</vIBSUF>
+          </gIBSUFTot>
+        </gIBS>
+        <gCBS>
+          <vCBS>9.00</vCBS>
+        </gCBS>
+        <vTotNF>974.00</vTotNF>
+      </totCIBS>
+    </IBSCBS>
+    <DPS versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
+      <infDPS Id="DPS35500000011111111000191000000000000000000000001">
+        <tpAmb>1</tpAmb>
+        <dhEmi>2026-05-10T09:29:50-03:00</dhEmi>
+        <verAplic>TesteFixture_1.0.0</verAplic>
+        <serie>1</serie>
+        <nDPS>1</nDPS>
+        <dCompet>2026-05-10</dCompet>
+        <tpEmit>1</tpEmit>
+        <cLocEmi>3550308</cLocEmi>
+        <prest>
+          <CNPJ>11111111000191</CNPJ>
+          <IM>123456</IM>
+          <fone>1130000000</fone>
+          <email>contato@prestadorateste.com.br</email>
+          <regTrib>
+            <opSimpNac>3</opSimpNac>
+            <regApTribSN>1</regApTribSN>
+            <regEspTrib>0</regEspTrib>
+          </regTrib>
+        </prest>
+        <toma>
+          <CNPJ>22222222000122</CNPJ>
+          <IM>654321</IM>
+          <xNome>TOMADORA DE SERVICOS DE TESTE LTDA</xNome>
+          <end>
+            <endNac>
+              <cMun>3550308</cMun>
+              <CEP>02000000</CEP>
+            </endNac>
+            <xLgr>AV DAS TOMADORAS</xLgr>
+            <nro>200</nro>
+            <xBairro>JARDIM TESTE</xBairro>
+          </end>
+          <fone>1140000000</fone>
+          <email>financeiro@tomadorateste.com.br</email>
+        </toma>
+        <interm>
+          <CPF>32132132100</CPF>
+          <xNome>INTERMEDIARIO DE TESTE</xNome>
+          <end>
+            <endNac>
+              <cMun>3550308</cMun>
+              <CEP>03000000</CEP>
+            </endNac>
+            <xLgr>RUA DO INTERMEDIARIO</xLgr>
+            <nro>300</nro>
+            <xBairro>VILA TESTE</xBairro>
+          </end>
+          <fone>1150000000</fone>
+          <email>intermediario@teste.com.br</email>
+        </interm>
+        <serv>
+          <locPrest>
+            <cLocPrestacao>3550308</cLocPrestacao>
+            <cPaisPrestacao>BR</cPaisPrestacao>
+          </locPrest>
+          <cServ>
+            <cTribNac>140601</cTribNac>
+            <cTribMun>140601001</cTribMun>
+            <xDescServ>Consultoria técnica em tecnologia da informação, incluindo levantamento de requisitos, análise de sistemas e acompanhamento de implantação de software de gestão empresarial ao longo de todo o projeto contratado, com entregas parciais mensais e relatório de horas.</xDescServ>
+            <cNBS>112011000</cNBS>
+          </cServ>
+          <obra>
+            <inscImobFisc>OBRA-000123</inscImobFisc>
+            <cObra>000123</cObra>
+          </obra>
+          <atvEvento>
+            <xNome>Feira de Tecnologia 2026</xNome>
+            <dtIni>2026-05-01</dtIni>
+            <dtFim>2026-05-05</dtFim>
+            <idAtvEvt>EVT-2026-01</idAtvEvt>
+          </atvEvento>
+          <infoCompl>
+            <idDocTec>ART-000999</idDocTec>
+            <docRef>PEDIDO-000777</docRef>
+            <xInfComp>Serviço prestado conforme contrato nº 2026/010.</xInfComp>
+            <xPed>PED-4567</xPed>
+            <xItemPed>1</xItemPed>
+          </infoCompl>
+        </serv>
+        <valores>
+          <vServPrest>
+            <vServ>1000.00</vServ>
+          </vServPrest>
+          <vDescCondIncond>
+            <vDescIncond>0.00</vDescIncond>
+            <vDescCond>0.00</vDescCond>
+          </vDescCondIncond>
+          <trib>
+            <tribMun>
+              <tribISSQN>1</tribISSQN>
+              <tpRetISSQN>1</tpRetISSQN>
+              <pAliq>5.00</pAliq>
+            </tribMun>
+            <tribFed>
+              <piscofins>
+                <CST>01</CST>
+                <vBCPisCofins>1000.00</vBCPisCofins>
+                <pAliqPis>0.65</pAliqPis>
+                <pAliqCofins>3.00</pAliqCofins>
+                <vPis>6.50</vPis>
+                <vCofins>30.00</vCofins>
+                <tpRetPisCofins>2</tpRetPisCofins>
+              </piscofins>
+              <vRetCP>0.00</vRetCP>
+              <vRetIRRF>15.00</vRetIRRF>
+              <vRetCSLL>10.00</vRetCSLL>
+            </tribFed>
+            <totTrib>
+              <vTotTrib>
+                <vTotTribFed>61.50</vTotTribFed>
+                <vTotTribEst>0.00</vTotTribEst>
+                <vTotTribMun>50.00</vTotTribMun>
+              </vTotTrib>
+            </totTrib>
+          </trib>
+        </valores>
+        <IBSCBS>
+          <valores>
+            <trib>
+              <gIBSCBS>
+                <CST>200</CST>
+                <cClassTrib>200001</cClassTrib>
+              </gIBSCBS>
+            </trib>
+          </valores>
+        </IBSCBS>
+      </infDPS>
+    </DPS>
+  </infNFSe>
+</NFSe>
