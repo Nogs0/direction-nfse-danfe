@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using PuppeteerSharp;
 using PuppeteerSharp.Media;
 
@@ -14,11 +16,13 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
     private readonly SemaphoreSlim _poolLock;
     private readonly ConcurrentBag<IPage> _pagePool = new();
     private readonly int _poolSize;
+    private readonly ILogger<DanfePdfGenerator> _logger;
 
-    public DanfePdfGenerator(int poolSize = 0)
+    public DanfePdfGenerator(int poolSize = 0, ILogger<DanfePdfGenerator>? logger = null)
     {
         _poolSize = poolSize > 0 ? poolSize : Environment.ProcessorCount;
         _poolLock = new SemaphoreSlim(_poolSize, _poolSize);
+        _logger = logger ?? NullLogger<DanfePdfGenerator>.Instance;
     }
 
     public async Task<IBrowser> GetBrowserAsync()
@@ -31,6 +35,9 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
         {
             if (_browser is { IsConnected: true })
                 return _browser;
+
+            // Recursos da execução anterior (se houver) não podem sobreviver ao relaunch.
+            await DrenarPoolAsync();
 
             var executablePath = Environment.OSVersion.Platform == PlatformID.Unix
                 ? "/usr/bin/chromium"
@@ -51,10 +58,11 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--single-process"
+                    "--disable-gpu"
                 }
             });
+
+            _logger.LogInformation("Navegador Chromium (re)inicializado para geração de DANFSe.");
 
             // Pré-aquece o pool criando as páginas no startup
             var tasks = new Task[_poolSize];
@@ -70,6 +78,41 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
             _initLock.Release();
         }
     }
+
+    private async Task DrenarPoolAsync()
+    {
+        var descartadas = 0;
+        while (_pagePool.TryTake(out var antiga))
+        {
+            await DescartarAsync(antiga);
+            descartadas++;
+        }
+
+        if (descartadas > 0)
+        {
+            _logger.LogWarning(
+                "Pool de páginas drenado antes da (re)inicialização do navegador: {Quantidade} página(s) órfã(s) descartada(s).",
+                descartadas);
+        }
+    }
+
+    private async Task DescartarAsync(IPage page)
+    {
+        try
+        {
+            if (!page.IsClosed)
+                await page.CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            // A página já pode estar morta (processo do renderer caiu); não há o que fazer além de logar.
+            _logger.LogDebug(ex, "Falha ao descartar página de renderização (provavelmente já inutilizada).");
+        }
+    }
+
+    // Lógica pura de decisão do pool: sem dependência de IPage/IBrowser, testável isoladamente.
+    internal bool DeveReciclarPagina(bool sucesso, bool paginaFechada, int quantidadeAtualNoPool)
+        => sucesso && !paginaFechada && quantidadeAtualNoPool < _poolSize;
 
     private async Task WarmUpPageAsync()
     {
@@ -102,6 +145,7 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
             await ConfigurePageAsync(page);
         }
 
+        var sucesso = false;
         try
         {
             await page.SetContentAsync(html, new NavigationOptions
@@ -110,7 +154,7 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
                 WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }
             });
 
-            return await page.PdfDataAsync(new PdfOptions
+            var pdf = await page.PdfDataAsync(new PdfOptions
             {
                 Format = PaperFormat.A4,
                 PrintBackground = true,
@@ -122,11 +166,26 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
                     Right = "2mm"
                 }
             });
+
+            sucesso = true;
+            return pdf;
         }
         finally
         {
-            // Devolve a página ao pool em vez de fechar
-            _pagePool.Add(page);
+            // Página com falha (timeout/erro de conversão/renderer caído) nunca é reaproveitada;
+            // e o pool nunca cresce além de _poolSize.
+            if (DeveReciclarPagina(sucesso, page.IsClosed, _pagePool.Count))
+            {
+                _pagePool.Add(page);
+            }
+            else
+            {
+                if (!sucesso)
+                    _logger.LogWarning("Falha na renderização do DANFSe; página descartada em vez de reaproveitada.");
+
+                await DescartarAsync(page);
+            }
+
             _poolLock.Release();
         }
     }
