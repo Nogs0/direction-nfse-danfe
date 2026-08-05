@@ -499,7 +499,7 @@ public sealed class DanfeHtmlRenderer
 
         return $@"
           <div class=""section"">
-            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+            <div class=""section-content"" style=""padding: 1px 6px 1px 6px"">
               <table style=""width: 100%; border-collapse: collapse"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-size: 12px; font-weight: bold"">{titulo}</span></td>
@@ -508,13 +508,13 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Telefone</span><br />{fone}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Nome / Nome Empresarial</span><br />{nome}</td>
                   <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">E-mail</span><br />{email}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">*Endereço</span><br />{endereco}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Município / Sigla UF</span><br />{municipioUf}</td>
@@ -570,7 +570,7 @@ public sealed class DanfeHtmlRenderer
         return $@"
           <div class=""section"">
             <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">TRIBUTAÇÃO MUNICIPAL (ISSQN)</div>
-            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+            <div class=""section-content"" style=""padding: 1px 6px 1px 6px"">
               <table style=""width: 100%; border-collapse: collapse"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Tipo de Tributação do ISSQN</span><br />{issTributacao}</td>
@@ -579,7 +579,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Regime Especial de Tributação</span><br />{issRegime}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Tipo de Imunidade</span><br />{issOperacao}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Suspensão da Exigibilidade do ISSQN</span><br />{issSuspensao}</td>
@@ -587,7 +587,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Benefício Municipal</span><br />{issBeneficio}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Desconto Incondicionado</span><br />{issDescIncond}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Total Deduções/Reduções</span><br />{issDeducoes}</td>
@@ -595,7 +595,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">BC ISSQN</span><br />{issBc}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota Aplicada</span><br />{issAliq}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Retenção do ISSQN</span><br />{issRetencao}</td>
@@ -643,7 +643,7 @@ public sealed class DanfeHtmlRenderer
         return $@"
           <div class=""section"">
             <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">TRIBUTAÇÃO IBS / CBS</div>
-            <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+            <div class=""section-content"" style=""padding: 1px 6px 1px 6px"">
               <table style=""width: 100%; border-collapse: collapse"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">CST / cClassTrib</span><br />{cstCClassTrib}</td>
@@ -651,7 +651,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Código IBGE Incidência / Município Incidência / Sigla UF</span><br />{municipioIncidencia}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Exclusões e Reduções da Base de Cálculo</span><br />{exclusoesReducoes}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Base de Cálculo Após Exclusões e Reduções</span><br />{baseCalculo}</td>
@@ -659,7 +659,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota IBS UF / IBS Mun</span><br />{aliqIbsUfMun}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíq. Efetiva Municipal - IBS</span><br />{aliqEfetivaMun}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Apurado Municipal - IBS</span><br />{valorApuradoMun}</td>
@@ -667,7 +667,7 @@ public sealed class DanfeHtmlRenderer
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Apurado Estadual - IBS</span><br />{valorApuradoUf}</td>
                 </tr>
               </table>
-              <table style=""width: 100%; border-collapse: collapse; margin-top: 5px"">
+              <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Valor Total Apurado - IBS</span><br />{valorTotalIbs}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota - CBS</span><br />{aliqCbs}</td>
@@ -699,7 +699,7 @@ public sealed class DanfeHtmlRenderer
       <div style=""border-top: 1px solid #000; margin: 0 5px""></div>
       <div class=""section"" style=""border-bottom: none;"">
         <div class=""section-title"" style=""font-size: 12px; font-weight: bold; padding-left: 6px"">CANHOTO</div>
-        <div class=""section-content"" style=""padding: 1px 6px 6px 6px"">
+        <div class=""section-content"" style=""padding: 1px 6px 1px 6px"">
           <table style=""width: 100%; border-collapse: collapse"">
             <tr>
               <td style=""vertical-align: top; width: 33%""><span class=""label"" style=""font-weight: bold"">Data Cientificação</span><br />&nbsp;</td>

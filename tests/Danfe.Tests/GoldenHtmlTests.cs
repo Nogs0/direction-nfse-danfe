@@ -68,6 +68,44 @@ public class GoldenHtmlTests
         Assert.Equal((byte)'F', result.PdfBytes[3]);
     }
 
+    // Regra 4.8.6 exige uma única página A4 mesmo com todos os blocos opcionais e descrição
+    // extensa preenchidos; o canhoto (habilitado por padrão) chegou a empurrar o conteúdo para
+    // uma 2ª página inteira (feedback #2357949). Mede a altura renderizada contra a área útil de
+    // uma página A4 (297mm menos 2mm de margem em cada lado, a 96dpi) em vez de inspecionar os
+    // bytes do PDF gerado (Chromium usa xref/object streams comprimidos, não é trivial de parsear).
+    [Trait("Category", "Integration")]
+    [Theory]
+    [InlineData(DanfeEnvironment.Production, false, false)]
+    [InlineData(DanfeEnvironment.Production, true, false)]
+    [InlineData(DanfeEnvironment.Production, false, true)]
+    [InlineData(DanfeEnvironment.Restricted, false, false)]
+    public async System.Threading.Tasks.Task MassaCompleta_ComCanhoto_CabeEmUmaUnicaPaginaA4(
+        DanfeEnvironment environment, bool isCancelled, bool isReplaced)
+    {
+        const double AlturaUtilA4Px = (297 - 2 * 2) * 96 / 25.4;
+
+        var nfse = DeserializeFixture("nfse-completa");
+        var renderer = new DanfeHtmlRenderer(new DanfeOptions());
+        var (html, _) = renderer.Render(nfse, environment, isCancelled, isReplaced);
+
+        await using var pdfGenerator = new DanfePdfGenerator();
+        var browser = await pdfGenerator.GetBrowserAsync();
+        var page = await browser.NewPageAsync();
+        try
+        {
+            await page.SetContentAsync(html);
+            var height = await page.EvaluateExpressionAsync<double>("document.body.scrollHeight");
+            Assert.True(
+                height <= AlturaUtilA4Px,
+                $"Conteúdo ({height}px) excede a área útil de uma página A4 ({AlturaUtilA4Px:F1}px) — " +
+                "o canhoto ou outro bloco pode estar transbordando para uma 2ª página.");
+        }
+        finally
+        {
+            await page.CloseAsync();
+        }
+    }
+
     private static NFSeSchema DeserializeFixture(string fixture)
     {
         var xmlPath = Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture + ".xml");

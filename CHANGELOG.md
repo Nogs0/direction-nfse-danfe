@@ -1,3 +1,18 @@
+## [1.1.1.0] - 2026-08-05
+
+Entrega referente ao item **#2357949** (Redmine) — feedback de revisão sobre #2357201 e #2357225,
+da análise #2356243 (NFS-e Nacional — Disponibilidade Local e Conformidade ao Novo Layout).
+
+### Correções
+- **Correção de bug (regra 4.8.6)**: massa completa com todos os blocos opcionais preenchidos
+  (tomador, intermediário, obra, evento, informações complementares, IBS/CBS) mais descrição de
+  serviço longa e o canhoto habilitado saía em 2 páginas A4 — a 2ª contendo apenas o bloco
+  CANHOTO. Espaçamento vertical (margens/paddings redundantes e `line-height`) do template e do
+  renderizador ajustado para caber em uma única página A4, sem cortar conteúdo obrigatório.
+- Adicionado teste de regressão automatizado (`MassaCompleta_ComCanhoto_CabeEmUmaUnicaPaginaA4`)
+  cobrindo os cenários regular, cancelada, substituída e Produção Restrita com o canhoto
+  habilitado.
+
 ## [1.1.0.0] - 2026-07-30
 
 Entrega referente ao item **#2357201** (Redmine) — 4.2 e 4.4 a 4.8 da análise #2356243
