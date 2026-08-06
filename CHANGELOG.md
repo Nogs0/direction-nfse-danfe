@@ -1,3 +1,30 @@
+## [1.1.3.0] - 2026-08-06
+
+Entrega referente ao item **#2358429** (Redmine) — correção de packaging descoberta ao investigar
+por que consumidores via `PackageReference` (ex.: `nfsenacional`) não recebiam os ajustes de
+layout das versões 1.1.1/1.1.2.
+
+### Correções
+- **Correção de bug crítico de empacotamento**: `DanfeHtmlRenderer` resolve o template em
+  `{AppContext.BaseDirectory}/Assets/Templates/Danfe.html` (caminho "plano"). Para consumidores
+  via `PackageReference`, o `Content` dos `Assets` era empacotado em
+  `contentFiles/any/any/Nogueira.NFSe.Danfe.FixLinux/Assets/...` — com o nome do pacote como
+  subpasta —, então o NuGet copiava para
+  `{bin}/Nogueira.NFSe.Danfe.FixLinux/Assets/Templates/Danfe.html` no projeto consumidor, **não**
+  no caminho plano esperado pelo renderizador. Isso nunca funcionou automaticamente para esse tipo
+  de consumo; o projeto `nfsenacional` contornava manualmente mantendo uma cópia local de
+  `Assets/` (incluindo `Danfe.html`) dentro do próprio repositório — cópia que parou de ser
+  atualizada em 30/07/2026 e, por isso, sombreava silenciosamente todos os ajustes de layout
+  publicados nas versões 1.1.1 e 1.1.2 (o app sempre renderizava a partir da cópia antiga, nunca
+  do template atualizado da biblioteca).
+- Corrigido o `PackagePath` do `Content Include="Assets\**\*"` em `Danfe.csproj` para
+  `contentFiles/any/any/Assets` (sem a subpasta do nome do pacote), fazendo o NuGet copiar para o
+  mesmo caminho plano que consumidores por referência de projeto (`GeraDanfe`, `Danfe.Tests`) já
+  recebem — eliminando a necessidade de qualquer cópia local nos projetos consumidores.
+- Verificado manualmente: `dotnet pack` + `dotnet restore` num consumidor de teste confirmam que
+  `Assets/Templates/Danfe.html` chega no caminho correto, com o conteúdo atualizado (margens/
+  `line-height` da versão 1.1.2), sem exigir nenhuma configuração ou cópia local do consumidor.
+
 ## [1.1.2.0] - 2026-08-06
 
 Entrega referente ao item **#2358429** (Redmine) — feedback de revisão sobre #2357202, da análise

@@ -12,7 +12,7 @@
         <OutputType>Library</OutputType>
 
         <PackageId>Nogueira.NFSe.Danfe.FixLinux</PackageId>
-        <Version>1.1.2.0</Version>
+        <Version>1.1.3.0</Version>
         <Authors>João Nogueira; João Piva; Direction Systems Ltda.; Jairo Marques</Authors>
         <Company>João Nogueira; João Piva; Direction Systems Ltda.</Company>
         <Copyright>Copyright © Direction Systems Ltda. 2026</Copyright>
@@ -71,7 +71,7 @@
 
 
     <ItemGroup>
-        <Content Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Nogueira.NFSe.Danfe.FixLinux\Assets">
+        <Content Include="Assets\**\*" Pack="true" PackagePath="contentFiles\any\any\Assets">
             <PackageCopyToOutput>true</PackageCopyToOutput>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
