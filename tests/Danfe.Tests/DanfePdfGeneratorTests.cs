@@ -49,6 +49,33 @@ public class DanfePdfGeneratorTests
         Assert.True(generator.DeveReciclarPagina(sucesso: true, paginaFechada: false, quantidadeAtualNoPool: 1));
     }
 
+    [Fact]
+    public void ComputeScaleToFitOnePage_QuandoConteudoCabeNaPagina_RetornaEscalaCheia()
+    {
+        Assert.Equal(1.0, DanfePdfGenerator.ComputeScaleToFitOnePage(DanfePdfGenerator.PageContentHeightPx - 1));
+    }
+
+    [Fact]
+    public void ComputeScaleToFitOnePage_QuandoConteudoUltrapassaPorPouco_EncolheOSuficiente()
+    {
+        var alturaConteudo = DanfePdfGenerator.PageContentHeightPx * 1.05;
+
+        var escala = DanfePdfGenerator.ComputeScaleToFitOnePage(alturaConteudo);
+
+        Assert.True(escala < 1.0);
+        Assert.Equal(DanfePdfGenerator.PageContentHeightPx, alturaConteudo * escala, precision: 3);
+    }
+
+    [Fact]
+    public void ComputeScaleToFitOnePage_QuandoConteudoExcedeMuito_NaoEncolheAlemDoPiso()
+    {
+        var alturaConteudo = DanfePdfGenerator.PageContentHeightPx * 2;
+
+        var escala = DanfePdfGenerator.ComputeScaleToFitOnePage(alturaConteudo);
+
+        Assert.Equal(DanfePdfGenerator.MinScale, escala);
+    }
+
     // Cobre o cenário de aceite do item 4.3: derrubar o navegador interno durante a operação e
     // confirmar que, após a recuperação automática, a geração volta a funcionar sem falha
     // residual (o pool de páginas órfãs do processo anterior precisa ser drenado no relaunch).

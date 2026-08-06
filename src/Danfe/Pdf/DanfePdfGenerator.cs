@@ -114,6 +114,31 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
     internal bool DeveReciclarPagina(bool sucesso, bool paginaFechada, int quantidadeAtualNoPool)
         => sucesso && !paginaFechada && quantidadeAtualNoPool < _poolSize;
 
+    // Área útil de uma página A4 (297mm) menos as margens superior/inferior de 2mm usadas acima,
+    // convertida para px a 96dpi — mesma referência usada para medir document.body.scrollHeight.
+    internal const double PageContentHeightPx = (297 - 2 * 2) * 96 / 25.4;
+
+    // Largura útil da mesma página A4 (210mm menos as margens esquerda/direita de 2mm) — o
+    // viewport da página precisa ser ajustado a essa largura antes de medir scrollHeight, senão
+    // a medição usa a largura padrão do Puppeteer (800px) em vez da largura real de impressão,
+    // subestimando a quebra de linha e, com isso, a altura real do conteúdo impresso.
+    internal const double PageContentWidthPx = (210 - 2 * 2) * 96 / 25.4;
+
+    // Piso de encolhimento: nunca reduzir a impressão além de ~8%, para não violar os tamanhos
+    // mínimos de fonte/campo do Anexo I da NT-008 (regra 4.8.6). Casos que precisassem de mais
+    // que isso para caber ficam com o canhoto em página própria, como já aceito em #2357949.
+    internal const double MinScale = 0.92;
+
+    // Lógica pura de cálculo de escala: sem dependência de IPage, testável isoladamente.
+    internal static double ComputeScaleToFitOnePage(double contentHeightPx)
+    {
+        if (contentHeightPx <= PageContentHeightPx)
+            return 1.0;
+
+        var escalaNecessaria = PageContentHeightPx / contentHeightPx;
+        return Math.Max(escalaNecessaria, MinScale);
+    }
+
     private async Task WarmUpPageAsync()
     {
         var page = await _browser!.NewPageAsync();
@@ -123,6 +148,11 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
 
     private static async Task ConfigurePageAsync(IPage page)
     {
+        await page.SetViewportAsync(new ViewPortOptions
+        {
+            Width = (int)Math.Round(PageContentWidthPx),
+            Height = (int)Math.Round(PageContentHeightPx)
+        });
         await page.SetRequestInterceptionAsync(true);
         page.Request += (_, e) =>
         {
@@ -154,10 +184,20 @@ public sealed class DanfePdfGenerator : IAsyncDisposable
                 WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }
             });
 
+            // Regra 4.8.6 exige uma única página A4 mesmo em combinações de blocos opcionais
+            // não previstas nos cenários de teste (ex.: NFS-e Substituída com todos os blocos
+            // preenchidos, onde diferenças de fonte entre ambientes podem consumir a margem de
+            // segurança do template). Em vez de perseguir cada novo caso limite ajustando
+            // espaçamento, mede-se a altura renderizada e encolhe-se a impressão (dentro de um
+            // piso que preserva os tamanhos mínimos de fonte do Anexo I) o suficiente para caber.
+            var scrollHeight = await page.EvaluateExpressionAsync<double>("document.body.scrollHeight");
+            var scale = ComputeScaleToFitOnePage(scrollHeight);
+
             var pdf = await page.PdfDataAsync(new PdfOptions
             {
                 Format = PaperFormat.A4,
                 PrintBackground = true,
+                Scale = (decimal)scale,
                 MarginOptions = new MarginOptions
                 {
                     Top = "2mm",

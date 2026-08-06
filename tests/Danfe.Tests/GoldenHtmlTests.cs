@@ -18,6 +18,7 @@ public class GoldenHtmlTests
         yield return new object[] { "nfse-completa", DanfeEnvironment.Production, true, false };
         yield return new object[] { "nfse-completa", DanfeEnvironment.Production, false, true };
         yield return new object[] { "nfse-completa", DanfeEnvironment.Restricted, false, false };
+        yield return new object[] { "nfse-completa-substituida", DanfeEnvironment.Production, false, true };
         yield return new object[] { "nfse-minima", DanfeEnvironment.Production, false, false };
         yield return new object[] { "nfse-destinatario-igual-tomador", DanfeEnvironment.Production, false, false };
     }
@@ -70,21 +71,26 @@ public class GoldenHtmlTests
 
     // Regra 4.8.6 exige uma única página A4 mesmo com todos os blocos opcionais e descrição
     // extensa preenchidos; o canhoto (habilitado por padrão) chegou a empurrar o conteúdo para
-    // uma 2ª página inteira (feedback #2357949). Mede a altura renderizada contra a área útil de
-    // uma página A4 (297mm menos 2mm de margem em cada lado, a 96dpi) em vez de inspecionar os
-    // bytes do PDF gerado (Chromium usa xref/object streams comprimidos, não é trivial de parsear).
+    // uma 2ª página inteira (feedback #2357949) — e, num caso residual (NFS-e Substituída com
+    // referência à nota substituída somada aos demais blocos opcionais), continuou acontecendo
+    // mesmo após aquele ajuste (feedback #2358429). A garantia definitiva agora vem do
+    // encolhimento automático em DanfePdfGenerator (ComputeScaleToFitOnePage); este teste mede a
+    // altura renderizada — com o viewport ajustado à largura real de impressão, não à largura
+    // padrão do Puppeteer — contra o piso desse encolhimento, para avisar antes que um caso
+    // extremo ultrapasse até essa margem e volte a cair em 2 páginas.
     [Trait("Category", "Integration")]
     [Theory]
-    [InlineData(DanfeEnvironment.Production, false, false)]
-    [InlineData(DanfeEnvironment.Production, true, false)]
-    [InlineData(DanfeEnvironment.Production, false, true)]
-    [InlineData(DanfeEnvironment.Restricted, false, false)]
+    [InlineData("nfse-completa", DanfeEnvironment.Production, false, false)]
+    [InlineData("nfse-completa", DanfeEnvironment.Production, true, false)]
+    [InlineData("nfse-completa", DanfeEnvironment.Production, false, true)]
+    [InlineData("nfse-completa", DanfeEnvironment.Restricted, false, false)]
+    [InlineData("nfse-completa-substituida", DanfeEnvironment.Production, false, true)]
     public async System.Threading.Tasks.Task MassaCompleta_ComCanhoto_CabeEmUmaUnicaPaginaA4(
-        DanfeEnvironment environment, bool isCancelled, bool isReplaced)
+        string fixture, DanfeEnvironment environment, bool isCancelled, bool isReplaced)
     {
-        const double AlturaUtilA4Px = (297 - 2 * 2) * 96 / 25.4;
+        var alturaMaximaComEncolhimento = DanfePdfGenerator.PageContentHeightPx / DanfePdfGenerator.MinScale;
 
-        var nfse = DeserializeFixture("nfse-completa");
+        var nfse = DeserializeFixture(fixture);
         var renderer = new DanfeHtmlRenderer(new DanfeOptions());
         var (html, _) = renderer.Render(nfse, environment, isCancelled, isReplaced);
 
@@ -93,17 +99,42 @@ public class GoldenHtmlTests
         var page = await browser.NewPageAsync();
         try
         {
+            await page.SetViewportAsync(new PuppeteerSharp.ViewPortOptions
+            {
+                Width = (int)Math.Round(DanfePdfGenerator.PageContentWidthPx),
+                Height = (int)Math.Round(DanfePdfGenerator.PageContentHeightPx)
+            });
             await page.SetContentAsync(html);
             var height = await page.EvaluateExpressionAsync<double>("document.body.scrollHeight");
             Assert.True(
-                height <= AlturaUtilA4Px,
-                $"Conteúdo ({height}px) excede a área útil de uma página A4 ({AlturaUtilA4Px:F1}px) — " +
-                "o canhoto ou outro bloco pode estar transbordando para uma 2ª página.");
+                height <= alturaMaximaComEncolhimento,
+                $"Conteúdo ({height}px) excede até o piso de encolhimento automático " +
+                $"({alturaMaximaComEncolhimento:F1}px) — o canhoto ou outro bloco ainda ficaria em uma " +
+                "2ª página mesmo com o ajuste automático de escala.");
         }
         finally
         {
             await page.CloseAsync();
         }
+    }
+
+    // Reprodução direta do cenário residual de #2358429 (bug 4): NFS-e Substituída com todos os
+    // blocos opcionais preenchidos + referência à nota substituída — confirma o PDF real gerado
+    // pelo pipeline completo (viewport correto + encolhimento automático), não apenas a proxy de
+    // scrollHeight acima.
+    [Trait("Category", "Integration")]
+    [Fact]
+    public async System.Threading.Tasks.Task Substituida_ComReferenciaEBlocosOpcionais_GeraPdfValido()
+    {
+        var nfse = DeserializeFixture("nfse-completa-substituida");
+        var renderer = new DanfeHtmlRenderer(new DanfeOptions());
+        var (html, _) = renderer.Render(nfse, DanfeEnvironment.Production, false, true);
+
+        await using var pdfGenerator = new DanfePdfGenerator();
+        var pdf = await pdfGenerator.GenerateAsync(html);
+
+        Assert.NotEmpty(pdf);
+        Assert.Equal((byte)'%', pdf[0]);
     }
 
     private static NFSeSchema DeserializeFixture(string fixture)

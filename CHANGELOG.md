@@ -1,3 +1,29 @@
+## [1.1.2.0] - 2026-08-06
+
+Entrega referente ao item **#2358429** (Redmine) — feedback de revisão sobre #2357202, da análise
+#2356243 (NFS-e Nacional — Disponibilidade Local e Conformidade ao Novo Layout).
+
+### Correções
+- **Correção de bug (regra 4.6.3)**: Benefício Municipal e País Resultado da Prestação do Serviço
+  nunca eram renderizados mesmo com `tpBM` e `cPaisResult` preenchidos no XML — o campo Benefício
+  Municipal lia `infDPS.valores.trib.tribMun.BM.nBM` (grupo errado) em vez de
+  `infNFSe.valores.tpBM`, e o campo País Resultado lia o endereço no exterior do tomador
+  (`infDPS.toma.end.endExt.cPais`) em vez de `infDPS.valores.trib.tribMun.cPaisResult`.
+- **Correção de bug residual (regra 4.8.6)**: um caso específico — NFS-e Substituída com todos os
+  blocos opcionais preenchidos e a linha adicional "NFS-e Subst.:" nas informações complementares —
+  continuava saindo em 2 páginas mesmo após o ajuste de espaçamento da versão 1.1.1. Causa raiz
+  dupla: (1) diferenças de fonte entre ambientes (Windows/Linux) consomem a margem de segurança de
+  forma imprevisível; (2) a própria medição de altura usada nos testes/geração usava a largura
+  padrão do Puppeteer (800px) em vez da largura real de impressão (~779px, A4 menos margens),
+  subestimando a quebra de linha real. Corrigido ajustando o viewport da página à largura real de
+  impressão antes de medir, e adicionado encolhimento automático da impressão
+  (`DanfePdfGenerator.ComputeScaleToFitOnePage`) sempre que o conteúdo medido exceder uma página A4
+  — limitado a um piso de 8% de encolhimento para preservar os tamanhos mínimos de fonte do Anexo I
+  da NT-008. Substitui o ajuste manual de espaçamento por um mecanismo durável que se auto-corrige
+  para combinações de campos futuras, em vez de reagir caso a caso.
+- Adicionado teste de regressão para o cenário residual (`Substituida_ComReferenciaEBlocosOpcionais_GeraPdfValido`)
+  e testes unitários puros para `ComputeScaleToFitOnePage`.
+
 ## [1.1.1.0] - 2026-08-05
 
 Entrega referente ao item **#2357949** (Redmine) — feedback de revisão sobre #2357201 e #2357225,

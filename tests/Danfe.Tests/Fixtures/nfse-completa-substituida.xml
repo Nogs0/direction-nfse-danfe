@@ -92,6 +92,11 @@
         <dCompet>2026-05-10</dCompet>
         <tpEmit>1</tpEmit>
         <cLocEmi>3550308</cLocEmi>
+        <subst>
+          <chSubstda>35000000011111111000191000000000000000000000000099</chSubstda>
+          <cMotivo>1</cMotivo>
+          <xMotivo>Erro na NFS-e original</xMotivo>
+        </subst>
         <prest>
           <CNPJ>11111111000191</CNPJ>
           <IM>123456</IM>

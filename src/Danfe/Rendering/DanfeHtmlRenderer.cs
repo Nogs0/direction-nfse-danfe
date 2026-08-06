@@ -552,13 +552,13 @@ public sealed class DanfeHtmlRenderer
         var tribMun = infDps.valores?.trib?.tribMun;
 
         var issTributacao = HtmlHelperEncode(GetDescricaoTributacao(tribMun?.tribISSQN));
-        var issPais = HtmlHelperEncode(DanfeFallback.OrDash(infDps.toma?.end?.endExt?.cPais, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.toma.end.endExt.cPais"));
+        var issPais = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.cPaisResult, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.valores.trib.tribMun.cPaisResult"));
         var issMunInc = HtmlHelperEncode(DanfeFallback.OrDash(municpioISSQN?.NomeComUf, warnings, "Município Incidência", "MunicipiosIbge.GetMunicipio(cLocIncid).NomeComUf"));
         var issRegime = HtmlHelperEncode(GetDescricaoRegimeEspecial(infDps.prest?.regTrib?.regEspTrib));
         var issOperacao = HtmlHelperEncode(GetDescricaoTipoImunidade(tribMun?.tpImunidade));
         var issSuspensao = HtmlHelperEncode(GetDescricaoTipoSuspensaoISSQN(tribMun?.exigSusp?.tpSusp));
         var issProcesso = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.exigSusp?.nProcesso, warnings, "Número Processo Suspensão", "infNFSe.DPS.InfDPS.valores.trib.tribMun.exigSusp.nProcesso"));
-        var issBeneficio = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.BM?.nBM.ToString(), warnings, "Benefício Municipal", "infNFSe.DPS.InfDPS.valores.trib.tribMun.BM.nBM"));
+        var issBeneficio = HtmlHelperEncode(DanfeFallback.OrDash(valores?.tpBM, warnings, "Benefício Municipal", "infNFSe.valores.tpBM"));
         var issDescIncond = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"));
         var issDeducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"));
         var issCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(tribMun?.BM?.vRedBCBM, ptBR, warnings, "vRedBCBM", "infNFSe.valores.trib.tribMun.BM.vRedBCBM"));

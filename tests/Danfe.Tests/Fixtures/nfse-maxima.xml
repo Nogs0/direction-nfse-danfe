@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Massa sintética de "pior caso": todos os blocos e campos opcionais renderizados pelo DANFSe
+  preenchidos simultaneamente, com textos livres no comprimento máximo plausível (descrição do
+  serviço, informações complementares, nomes e endereços) — usada para validar que o documento
+  continua cabendo em uma única página A4 mesmo na combinação mais densa possível de conteúdo.
+  Todos os dados (CNPJ/CPF, nomes, endereços, chaves) são fictícios.
+-->
 <NFSe versao="1.01" xmlns="http://www.sped.fazenda.gov.br/nfse">
   <infNFSe Id="NFS35000000011111111000191000000000000000000000000001">
     <xLocEmi>São Paulo</xLocEmi>
@@ -6,9 +13,9 @@
     <nNFSe>9001</nNFSe>
     <cLocIncid>3550308</cLocIncid>
     <xLocIncid>São Paulo</xLocIncid>
-    <xTribNac>Serviços de consultoria em tecnologia da informação</xTribNac>
-    <xTribMun>ISS sobre serviços técnicos</xTribMun>
-    <xNBS>Serviços de consultoria em tecnologia da informação</xNBS>
+    <xTribNac>Serviços de consultoria, análise e desenvolvimento de sistemas de tecnologia da informação</xTribNac>
+    <xTribMun>ISS sobre serviços técnicos e de engenharia de software</xTribMun>
+    <xNBS>Serviços de consultoria em tecnologia da informação e desenvolvimento de sistemas sob encomenda</xNBS>
     <verAplic>TesteFixture_1.0.0</verAplic>
     <ambGer>3</ambGer>
     <tpEmis>1</tpEmis>
@@ -18,25 +25,26 @@
     <nDFSe>1</nDFSe>
     <emit>
       <CNPJ>11111111000191</CNPJ>
-      <xNome>PRESTADORA DE SERVICOS DE TESTE LTDA</xNome>
+      <xNome>PRESTADORA DE SERVICOS DE CONSULTORIA E TECNOLOGIA DA INFORMACAO DE TESTE LTDA</xNome>
       <enderNac>
-        <xLgr>RUA DOS TESTES</xLgr>
-        <nro>100</nro>
-        <xBairro>CENTRO</xBairro>
+        <xLgr>RUA DOS DESENVOLVEDORES DE SOFTWARE DE TESTE, QUADRA 10, CONJUNTO COMERCIAL</xLgr>
+        <nro>1000</nro>
+        <xBairro>CENTRO EMPRESARIAL DE TESTE</xBairro>
         <cMun>3550308</cMun>
         <UF>SP</UF>
         <CEP>01000000</CEP>
       </enderNac>
       <fone>1130000000</fone>
-      <email>contato@prestadorateste.com.br</email>
+      <email>contato.financeiro@prestadorateste.com.br</email>
     </emit>
     <valores>
       <tpBM>1</tpBM>
-      <vCalcBM>0.00</vCalcBM>
+      <vCalcBM>25.00</vCalcBM>
       <vBC>1000.00</vBC>
       <pAliqAplic>5.00</pAliqAplic>
       <vISSQN>50.00</vISSQN>
       <vLiq>950.00</vLiq>
+      <xOutInf>Informação adicional de tributação municipal referente a benefício fiscal concedido pelo município de São Paulo, protocolo BM-2026-000456.</xOutInf>
     </valores>
     <IBSCBS>
       <finNFSe>1</finNFSe>
@@ -92,11 +100,16 @@
         <dCompet>2026-05-10</dCompet>
         <tpEmit>1</tpEmit>
         <cLocEmi>3550308</cLocEmi>
+        <subst>
+          <chSubstda>35000000011111111000191000000000000000000000000099</chSubstda>
+          <cMotivo>1</cMotivo>
+          <xMotivo>Erro na NFS-e original: divergência no valor do serviço prestado identificada após a emissão.</xMotivo>
+        </subst>
         <prest>
           <CNPJ>11111111000191</CNPJ>
-          <IM>123456</IM>
+          <IM>123456789</IM>
           <fone>1130000000</fone>
-          <email>contato@prestadorateste.com.br</email>
+          <email>contato.financeiro@prestadorateste.com.br</email>
           <regTrib>
             <opSimpNac>3</opSimpNac>
             <regApTribSN>1</regApTribSN>
@@ -105,34 +118,34 @@
         </prest>
         <toma>
           <CNPJ>22222222000122</CNPJ>
-          <IM>654321</IM>
-          <xNome>TOMADORA DE SERVICOS DE TESTE LTDA</xNome>
+          <IM>654321987</IM>
+          <xNome>TOMADORA DE SERVICOS DE CONSULTORIA EMPRESARIAL E CONTABIL DE TESTE LTDA</xNome>
           <end>
             <endNac>
               <cMun>3550308</cMun>
               <CEP>02000000</CEP>
             </endNac>
-            <xLgr>AV DAS TOMADORAS</xLgr>
-            <nro>200</nro>
-            <xBairro>JARDIM TESTE</xBairro>
+            <xLgr>AVENIDA DAS EMPRESAS TOMADORAS DE SERVICO, TORRE COMERCIAL B, ANDAR 15</xLgr>
+            <nro>2000</nro>
+            <xBairro>JARDIM EMPRESARIAL DE TESTE</xBairro>
           </end>
           <fone>1140000000</fone>
-          <email>financeiro@tomadorateste.com.br</email>
+          <email>financeiro.contas@tomadorateste.com.br</email>
         </toma>
         <interm>
           <CPF>32132132100</CPF>
-          <xNome>INTERMEDIARIO DE TESTE</xNome>
+          <xNome>INTERMEDIARIO PESSOA FISICA REPRESENTANTE COMERCIAL DE TESTE</xNome>
           <end>
             <endNac>
               <cMun>3550308</cMun>
               <CEP>03000000</CEP>
             </endNac>
-            <xLgr>RUA DO INTERMEDIARIO</xLgr>
+            <xLgr>RUA DOS REPRESENTANTES COMERCIAIS INTERMEDIARIOS DE TESTE</xLgr>
             <nro>300</nro>
-            <xBairro>VILA TESTE</xBairro>
+            <xBairro>VILA COMERCIAL DE TESTE</xBairro>
           </end>
           <fone>1150000000</fone>
-          <email>intermediario@teste.com.br</email>
+          <email>intermediario.comercial@teste.com.br</email>
         </interm>
         <serv>
           <locPrest>
@@ -142,7 +155,7 @@
           <cServ>
             <cTribNac>140601</cTribNac>
             <cTribMun>140601001</cTribMun>
-            <xDescServ>Consultoria técnica em tecnologia da informação, incluindo levantamento de requisitos, análise de sistemas e acompanhamento de implantação de software de gestão empresarial ao longo de todo o projeto contratado, com entregas parciais mensais e relatório de horas.</xDescServ>
+            <xDescServ>Consultoria técnica especializada em tecnologia da informação, incluindo levantamento detalhado de requisitos de negócio, análise e modelagem de sistemas corporativos, acompanhamento integral da implantação de software de gestão empresarial (ERP) ao longo de todo o ciclo do projeto contratado, com entregas parciais mensais, relatório detalhado de horas por colaborador e por frente de trabalho, revisão de arquitetura de software, execução de testes de integração entre módulos, suporte técnico pós-implantação por período de garantia contratual e treinamento presencial e remoto de usuários finais em todas as filiais e unidades da tomadora envolvidas no projeto, conforme cronograma detalhado no contrato de prestação de serviços nº 2026/010, incluindo eventuais aditivos contratuais posteriormente firmados entre as partes.</xDescServ>
             <cNBS>112011000</cNBS>
           </cServ>
           <obra>
@@ -150,7 +163,7 @@
             <cObra>000123</cObra>
           </obra>
           <atvEvento>
-            <xNome>Feira de Tecnologia 2026</xNome>
+            <xNome>Feira Internacional de Tecnologia e Inovação de São Paulo 2026</xNome>
             <dtIni>2026-05-01</dtIni>
             <dtFim>2026-05-05</dtFim>
             <idAtvEvt>EVT-2026-01</idAtvEvt>
@@ -158,7 +171,7 @@
           <infoCompl>
             <idDocTec>ART-000999</idDocTec>
             <docRef>PEDIDO-000777</docRef>
-            <xInfComp>Serviço prestado conforme contrato nº 2026/010.</xInfComp>
+            <xInfComp>Serviço prestado conforme contrato de prestação de serviços nº 2026/010, celebrado em 15/01/2026, incluindo o 1º e o 2º termos aditivos firmados em 10/03/2026 e 20/04/2026, respectivamente, com escopo de trabalho detalhado no Anexo Técnico I do referido instrumento contratual.</xInfComp>
             <xPed>PED-4567</xPed>
             <xItemPed>1</xItemPed>
           </infoCompl>
@@ -168,15 +181,31 @@
             <vServ>1000.00</vServ>
           </vServPrest>
           <vDescCondIncond>
-            <vDescIncond>0.00</vDescIncond>
-            <vDescCond>0.00</vDescCond>
+            <vDescIncond>10.00</vDescIncond>
+            <vDescCond>5.00</vDescCond>
           </vDescCondIncond>
+          <vDedRed>
+            <pDR>2.00</pDR>
+            <vDR>20.00</vDR>
+          </vDedRed>
           <trib>
             <tribMun>
               <tribISSQN>1</tribISSQN>
               <tpRetISSQN>1</tpRetISSQN>
               <pAliq>5.00</pAliq>
               <cPaisResult>US</cPaisResult>
+              <tpImunidade>1</tpImunidade>
+              <exigSusp>
+                <tpSusp>1</tpSusp>
+                <nProcesso>PROC-2026-000789</nProcesso>
+              </exigSusp>
+              <BM>
+                <nBM>1</nBM>
+                <vRedBCBM>25.00</vRedBCBM>
+                <pRedBCBM>2.50</pRedBCBM>
+                <tpRetISSQN>1</tpRetISSQN>
+                <pAliq>5.00</pAliq>
+              </BM>
             </tribMun>
             <tribFed>
               <piscofins>
@@ -188,13 +217,13 @@
                 <vCofins>30.00</vCofins>
                 <tpRetPisCofins>2</tpRetPisCofins>
               </piscofins>
-              <vRetCP>0.00</vRetCP>
+              <vRetCP>15.00</vRetCP>
               <vRetIRRF>15.00</vRetIRRF>
               <vRetCSLL>10.00</vRetCSLL>
             </tribFed>
             <totTrib>
               <vTotTrib>
-                <vTotTribFed>61.50</vTotTribFed>
+                <vTotTribFed>76.50</vTotTribFed>
                 <vTotTribEst>0.00</vTotTribEst>
                 <vTotTribMun>50.00</vTotTribMun>
               </vTotTrib>
@@ -202,6 +231,24 @@
           </trib>
         </valores>
         <IBSCBS>
+          <dest>
+            <CNPJ>33333333000133</CNPJ>
+            <xNome>DESTINATARIA FINAL DOS SERVICOS PRESTADOS EM OUTRA LOCALIDADE DE TESTE LTDA</xNome>
+            <end>
+              <endNac>
+                <cMun>4106902</cMun>
+                <CEP>80000000</CEP>
+              </endNac>
+              <xLgr>ALAMEDA DOS DESTINATARIOS FINAIS DE SERVICO, EDIFICIO CORPORATIVO CENTRAL</xLgr>
+              <nro>4000</nro>
+              <xBairro>CENTRO CIVICO DE TESTE</xBairro>
+            </end>
+            <fone>4130000000</fone>
+            <email>recebimento.notas@destinatariateste.com.br</email>
+          </dest>
+          <imovel>
+            <inscImobFisc>IMOVEL-000321</inscImobFisc>
+          </imovel>
           <valores>
             <trib>
               <gIBSCBS>

@@ -12,7 +12,7 @@
         <OutputType>Library</OutputType>
 
         <PackageId>Nogueira.NFSe.Danfe.FixLinux</PackageId>
-        <Version>1.1.1.0</Version>
+        <Version>1.1.2.0</Version>
         <Authors>João Nogueira; João Piva; Direction Systems Ltda.; Jairo Marques</Authors>
         <Company>João Nogueira; João Piva; Direction Systems Ltda.</Company>
         <Copyright>Copyright © Direction Systems Ltda. 2026</Copyright>
