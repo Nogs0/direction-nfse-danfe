@@ -30,7 +30,8 @@ namespace Direction.NFSe.Danfe
         public int tpEmis { get; set; }
         public long procEmi { get; set; }
         public long cStat { get; set; }
-        public DateTime dhProc { get; set; }
+        // string (e não DateTime): o XmlSerializer converteria o offset para o fuso do servidor (NT-008 4.4.3).
+        public string? dhProc { get; set; }
         public long nDFSe { get; set; }
         public Emit? emit { get; set; }
         public ValoresNfse? valores { get; set; }
@@ -465,7 +466,8 @@ namespace Direction.NFSe.Danfe
 
     public class IBSCBS
     {
-        public long finNFSe { get; set; }
+        public long? finNFSe { get; set; }
+        public bool ShouldSerializefinNFSe() => finNFSe.HasValue;
         public long indFinal { get; set; }
         public string? cIndOp { get; set; }
         public string? cLocalidadeIncid { get; set; }

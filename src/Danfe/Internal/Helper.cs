@@ -95,10 +95,11 @@ namespace Direction.NFSe.Danfe
             return null;
         }
 
-        public static DateTime? TryParseDateTime(string? value)
+        // DateTimeOffset preserva o relógio local do offset informado no XML (sem converter para o fuso do servidor/UTC).
+        public static DateTimeOffset? TryParseDateTime(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return null;
-            if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
                 return dt;
             return null;
         }

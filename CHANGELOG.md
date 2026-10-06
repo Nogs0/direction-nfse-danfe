@@ -1,3 +1,69 @@
+## [1.2.0.0] - 2026-10-06
+
+Entrega referente ao item **#2366405** (Redmine), da análise #2366209 (NFS-e Nacional — DANFS-e —
+Campos Fiscais Divergentes da NT 008 v1.02). A nota real nº 59 (`tpRetPisCofins=3`) expôs
+convenções anteriores ao leiaute nacional vigente que ainda geravam descrições e totais
+divergentes do DANFS-e oficial.
+
+### Correções
+- **4.1 — Descrição Contrib. Sociais - Retidas**: `tpRetPisCofins` deixa de ser interpretado pelo
+  switch legado (1 a 4) e passa a usar a tabela vigente (1, 3, 4, 5, 6, 7, 8 e 9), exposta como
+  API pública em `TpRetPisCofins` — fonte única, também consumida pelo conversor da NFS-e Nacional.
+  O DANFS-e imprime `"{código} {descrição}"` (ex.: `3 PIS/COFINS/CSLL Retidos`); códigos fora da
+  tabela (inclusive 0 e 2) exibem `-` com warning.
+- **4.2 — Contribuições Sociais - Retidas / PIS / COFINS**: `vRetCSLL` é impresso como informado
+  (CSLL isolada ou agregado, conforme o código), e PIS/COFINS (Débito Apuração Própria) exibem
+  `vPis`/`vCofins` sem reentrar em nenhuma totalização.
+- **4.3 — Total das Retenções**: reproduz `infNFSe/valores/vTotalRet` diretamente (`-` se ausente,
+  sem aviso — a tag é opcional quando nada é retido), sem recomposição a partir de
+  IRRF/CP/CSLL/PIS/COFINS/ISSQN.
+- **4.4 — Exclusões e Reduções da Base de Cálculo**: passa a ser
+  `vDescIncond + vCalcReeRepRes + vISSQN + vPis + vCofins` (ausentes = 0), em vez de só
+  `vCalcReeRepRes`. A Base Após Exclusões continua reproduzindo `infNFSe/IBSCBS/valores/vBC`.
+- **4.5 — Indicador de Operação**: célula única `cIndOp / cLocalidadeIncid / xLocalidadeIncid / UF`;
+  `cIndOp` cai para `infDPS/IBSCBS/cIndOp` quando ausente em `infNFSe/IBSCBS`.
+- **4.6 — Finalidade**: lida de `infDPS/IBSCBS/finNFSe` pela enumeração vigente (`0` = NFS-e
+  regular); a enumeração antiga (1 a 4) deixa de ser interpretada. `IBSCBS.finNFSe` passa a `long?`
+  para distinguir ausente de `0`.
+- **4.7 — Data/hora**: `dhProc`/`dhEmi` passam a preservar o relógio do offset informado no XML
+  (`DateTimeOffset`), sem conversão para o fuso do servidor/UTC — antes, em container UTC,
+  `17:41:37-03:00` saía `20:41:37`. `InfNFSe.dhProc` passa a `string?`.
+- **4.8 — Total Tributação Federal**: campo removido (não previsto na NT 008 v1.02 nem no Anexo I).
+
+### Mudanças de API pública (por isso 1.2.0, e não patch)
+- **Quebra de compatibilidade** em `NFSeSchema`: `InfNFSe.dhProc` `DateTime` → `string?` e
+  `IBSCBS.finNFSe` `long` → `long?` (com `ShouldSerializefinNFSe`). Consumidores que leem esses
+  campos precisam recompilar/ajustar.
+- Nova classe pública `TpRetPisCofins` (classificação vigente de `tpRetPisCofins`).
+
+### Diagnóstico
+- Substituição de placeholders em passada única sobre o template: texto do XML no formato `{{...}}`
+  (ex.: na descrição do serviço) não é mais reprocessado por substituições posteriores.
+- `{{FED_TOTAL}}`, aposentado pela NT 008 v1.02, é removido de templates customizados
+  (`DanfeOptions.TemplatePath`) com `TEMPLATE_PLACEHOLDER_EMPTY`; demais placeholders desconhecidos
+  do consumidor são preservados.
+- Indicador de Operação emite `NFSE_FIELD_MISSING` por componente ausente e
+  `MUNICIPIO_NOT_FOUND` quando `cLocalidadeIncid` não existe na tabela do IBGE (ou não é numérico),
+  ou um aviso próprio quando a tabela do IBGE não foi inicializada;
+  quando `xLocalidadeIncid` já traz "Município - UF", a UF não é repetida.
+- `finNFSe` ausente (em nota com grupo IBS/CBS) ou fora da enumeração vigente gera aviso;
+  `dhProc`/`dhEmi`/`dCompet` ausentes geram um único aviso (antes, dois) e `dhProc`/`dhEmi` presentes
+  mas não reconhecidos como data/hora, um aviso próprio. A competência passa a ser formatada com
+  cultura invariante (sempre `dd/MM/yyyy`).
+- `infNFSe/cLocIncid` com espaços ou não numérico deixa de derrubar o `Render` (antes,
+  `FormatException`) e o aviso de ausência passa a olhar o próprio `cLocIncid` (antes, por engano,
+  `cLocPrestacao`).
+
+### Testes
+- Nova fixture sintética `nfse-caso-2366209.xml` (valores fiscais da nota nº 59, sem dados reais) e
+  `Nt008CamposFiscaisTests`/`TpRetPisCofinsTests` cobrindo 4.1 a 4.8 (todos os códigos de
+  `tpRetPisCofins`, cada parcela da fórmula de Exclusões, offsets `-05:00`/`+02:00`/`Z`).
+- Snapshots dourados regravados; a diferença se limita aos campos dos itens 4.1 a 4.8.
+
+### Pontos de atenção (5.2 — não alterados)
+- `GetDescricaoRegimeEspecial` (`regEspTrib` 0 a 6) e `GetDescricaoAmbienteGerador` (`ambGer`)
+  continuam baseados em documentação pública, não na NT 008; confirmar contra o XSD vigente.
+
 ## [1.1.3.0] - 2026-08-06
 
 Entrega referente ao item **#2358429** (Redmine) — correção de packaging descoberta ao investigar

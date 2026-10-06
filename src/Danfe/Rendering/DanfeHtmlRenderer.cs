@@ -17,6 +17,21 @@ public sealed class DanfeHtmlRenderer
     private readonly DanfeOptions _options;
     private readonly string _templateContent;
     private static int _municipiosInitialized = 0;
+    private static readonly Regex PlaceholderDoTemplate = new Regex(@"\{\{[A-Z0-9_]+\}\}", RegexOptions.Compiled);
+
+    // UF ao final de xLocalidadeIncid: "Município - SC", "Município/SC", "Município (SC)".
+    private static readonly Regex SufixoUf = new Regex(@"\s*(?:[-/]\s*(?<uf>[A-Za-z]{2})|\(\s*(?<uf>[A-Za-z]{2})\s*\))\s*$", RegexOptions.Compiled);
+
+    // Blocos montados em C# como HTML completo (não passam por HtmlEncode).
+    private static readonly HashSet<string> PlaceholdersHtml = new HashSet<string>
+    {
+        "{{SERV_DESC_HTML}}", "{{INF_COMPLEMENTARES}}", "{{NFSE_CANCELADA_DIV}}", "{{NFSE_SUBSTITUIDA_DIV}}",
+        "{{BLOCO_TOMADOR}}", "{{BLOCO_DESTINATARIO}}", "{{BLOCO_INTERMEDIARIO}}", "{{BLOCO_TRIB_MUNICIPAL}}",
+        "{{BLOCO_IBSCBS}}", "{{BLOCO_CANHOTO}}",
+    };
+
+    // Campos removidos do leiaute (NT-008 v1.02) que ainda podem existir em templates customizados.
+    private static readonly HashSet<string> PlaceholdersAposentados = new HashSet<string> { "{{FED_TOTAL}}" };
 
     public DanfeHtmlRenderer(DanfeOptions options)
     {
@@ -74,11 +89,11 @@ public sealed class DanfeHtmlRenderer
         if (!competencia.HasValue) warnings.FieldMissing("dCompet", "infNFSe.DPS.InfDPS.dCompet", "-");
 
         // NT-008 4.4.3: a data/hora deve reproduzir a informação do XML, sem redução/acréscimo de fuso.
-        DateTime? dhEmissaoNfs = inf.dhProc;
-        if (!dhEmissaoNfs.HasValue) warnings.FieldMissing("dhProc", "infNFSe.dhProc", "-");
-
-        DateTime? dhEmissaoDps = Helper.TryParseDateTime(infDps.dhEmi);
-        if (!dhEmissaoDps.HasValue) warnings.FieldMissing("dhEmi", "infNFSe.DPS.InfDPS.dhEmi", "-");
+        // Um único aviso por campo (ausente ou não reconhecido), emitido por AvisarDataHoraInvalida.
+        DateTimeOffset? dhEmissaoNfs = Helper.TryParseDateTime(inf.dhProc);
+        DateTimeOffset? dhEmissaoDps = Helper.TryParseDateTime(infDps.dhEmi);
+        AvisarDataHoraInvalida(dhEmissaoNfs, inf.dhProc, "dhProc", "infNFSe.dhProc", warnings);
+        AvisarDataHoraInvalida(dhEmissaoDps, infDps.dhEmi, "dhEmi", "infNFSe.DPS.InfDPS.dhEmi", warnings);
 
         decimal vServico = infDps.valores?.vServPrest?.vServ ?? 0m;
         if (infDps.valores?.vServPrest?.vServ == null) warnings.FieldMissing("vServPrest.vServ", "infNFSe.DPS.InfDPS.valores.vServPrest.vServ", "0,00");
@@ -128,12 +143,9 @@ public sealed class DanfeHtmlRenderer
         else if (municipioPrestador == null)
             warnings.MunicipioNotFound("infNFSe.DPS.InfDPS.serv.locPrest.cLocPrestacao");
 
-        var cLocIncid = inf.cLocIncid;
-        var municpioISSQN = cLocIncid != null ? MunicipiosIbge.GetMunicipio(Int32.Parse(cLocIncid)) : null;
-        if (cLocPrest == null)
+        var municpioISSQN = ObterMunicipio(inf.cLocIncid, "infNFSe.cLocIncid", warnings);
+        if (string.IsNullOrWhiteSpace(inf.cLocIncid))
             warnings.FieldMissing("cLocIncid", "infNFSe.cLocIncid", "-");
-        else if (municpioISSQN == null)
-            warnings.MunicipioNotFound("infNFSe.cLocIncid");
 
         // Município emitente (cabeçalho)
         var municipioEmitente = DanfeFallback.OrDash($"{inf.xLocEmi} - {inf.emit?.enderNac?.UF}", warnings, "Município Emitente", "infNFSe.xLocEmi | infNFSe.emit.enderNac.UF");
@@ -155,32 +167,13 @@ public sealed class DanfeHtmlRenderer
         decimal? vCOFINS = infDps.valores?.trib?.tribFed?.piscofins?.vCofins;
         decimal? vPIS = infDps.valores?.trib?.tribFed?.piscofins?.vPis;
         decimal? vCP = infDps.valores?.trib?.tribFed?.vRetCP;
+        // NT-008: vRetCSLL é o valor de "Contribuições Sociais - Retidas" e, conforme tpRetPisCofins, pode ser a CSLL
+        // isolada ou o agregado PIS+COFINS+CSLL — é impresso como informado, sem somar PIS/COFINS de novo.
         decimal? vCSLL = infDps.valores?.trib?.tribFed?.vRetCSLL;
         string? outInf = inf.valores?.xOutInf;
 
-        decimal? vTotTribFed = infDps.valores?.trib?.totTrib?.vTotTrib?.vTotTribFed;
-        if (vTotTribFed == null || (vTotTribFed.HasValue && vTotTribFed.Value == 0M)) //nem sempre o objeto totalizador é informado no xml
-            vTotTribFed = (vIRRF ?? 0M) + (vPIS ?? 0M) + (vCOFINS ?? 0M) + (vCP ?? 0M) + (vCSLL ?? 0M);
-
-        decimal vTotalRetFed = (vIRRF ?? 0M) + (vCP ?? 0M) + (vCSLL ?? 0M);
-
-        decimal vRetPisCofins = 0M;
-        switch (tpRetPisCofins)
-        {
-            case 1: // 1 - PIS/COFINS Retido
-                vRetPisCofins = (vPIS ?? 0M) + (vCOFINS ?? 0M);
-                break;
-            case 2: // 2 - PIS / COFINS Não Retido
-            default:
-                vRetPisCofins = 0M;
-                break;
-            case 3: // 3 - PIS Retido / COFINS Não Retido
-                vRetPisCofins = (vPIS ?? 0M);
-                break;
-            case 4: // 4 - PIS Não Retido/ COFINS Retido;
-                vRetPisCofins = (vCOFINS ?? 0M);
-                break;
-        }
+        // NT-008 2.4.5: Total das Retenções reproduz a tag consolidada do XML, sem recomposição.
+        decimal? vTotalRet = valores?.vTotalRet;
 
         // Verifica se a NFSe está cancelada/substituída (marca d'água, NT-008 2.5.1/2.5.2)
         string canceladaDiv = isCancelled ? BuildMarcaDagua("CANCELADA") : string.Empty;
@@ -248,8 +241,11 @@ public sealed class DanfeHtmlRenderer
         var ibscbsApurado = inf.IBSCBS;
         var possuiIbsCbs = ibscbsDeclarado != null || ibscbsApurado != null;
 
+        // NT-008 v1.02: Exclusões e Reduções = vDescIncond + vCalcReeRepRes + vISSQN + vPis + vCofins (ausente = 0).
+        decimal exclusoesReducoes = vDescIncond + (ibscbsApurado?.valores?.vCalcReeRepRes ?? 0M) + (vIssqn ?? 0M) + (vPIS ?? 0M) + (vCOFINS ?? 0M);
+
         string blocoIbsCbs = possuiIbsCbs
-            ? BuildIbsCbsBloco(infDps, inf, ptBR, warnings)
+            ? BuildIbsCbsBloco(infDps, inf, exclusoesReducoes, ptBR, warnings)
             : string.Empty;
 
         // Totais de IBS/CBS (regra 4.7.4) — sempre reproduzidos do XML, nunca recalculados
@@ -293,12 +289,12 @@ public sealed class DanfeHtmlRenderer
             ["{{NUMERO_NFSE}}"] = numeroNfse,
             ["{{NUMERO_DPS}}"] = DanfeFallback.OrDash(numeroDps, warnings, "nDPS", "infNFSe.DPS.InfDPS.nDPS"),
             ["{{SERIE_DPS}}"] = DanfeFallback.OrDash(serieDps, warnings, "serie", "infNFSe.DPS.InfDPS.serie"),
-            ["{{COMPETENCIA}}"] = competencia?.ToString("dd/MM/yyyy") ?? DanfeFallback.OrDash(null, warnings, "dCompet", "infNFSe.DPS.InfDPS.dCompet"),
-            ["{{DATA_HORA_EMISSAO}}"] = dhEmissaoNfs?.ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhProc", "infNFSe.dhProc"),
-            ["{{DATA_HORA_EMISSAO_DPS}}"] = dhEmissaoDps?.ToString("dd/MM/yyyy HH:mm:ss") ?? DanfeFallback.OrDash(null, warnings, "dhEmi", "infNFSe.DPS.InfDPS.dhEmi"),
+            ["{{COMPETENCIA}}"] = competencia?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture) ?? "-",
+            ["{{DATA_HORA_EMISSAO}}"] = dhEmissaoNfs?.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture) ?? "-",
+            ["{{DATA_HORA_EMISSAO_DPS}}"] = dhEmissaoDps?.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture) ?? "-",
             ["{{EMITENTE_NFSE}}"] = GetDescricaoEmitente(infDps.tpEmit),
             ["{{SITUACAO_NFSE}}"] = GetDescricaoSituacao(isCancelled, isReplaced),
-            ["{{FINALIDADE_NFSE}}"] = GetDescricaoFinalidade(inf.IBSCBS?.finNFSe ?? infDps.IBSCBS?.finNFSe),
+            ["{{FINALIDADE_NFSE}}"] = GetDescricaoFinalidade(infDps.IBSCBS?.finNFSe ?? inf.IBSCBS?.finNFSe, possuiIbsCbs, warnings),
 
             // Prestador
             ["{{PREST_CNPJ}}"] = !string.IsNullOrEmpty(infDps.prest?.CPF) ? DanfeFallback.OrDash(Helper.FormatCpf(infDps.prest?.CPF), warnings, fieldName: "CNPJ Prestador", path: "infNFSe.DPS.InfDPS.prest.CPF")
@@ -331,12 +327,11 @@ public sealed class DanfeHtmlRenderer
 
             // Tributação Federal (exceto CBS)
             ["{{FED_IRRF}}"] = DanfeFallback.OrCurrency(vIRRF, ptBR, warnings, "vIRRF", "infDps.valores.trib.tribFed.vRetIRRF"),
-            ["{{FED_PIS}}"] = DanfeFallback.OrCurrency(vPIS, ptBR, warnings, "vPIS", "infNFSe.valores.trib.tribFed.piscofins.vPis"),
+            ["{{FED_PIS}}"] = DanfeFallback.OrCurrency(vPIS, ptBR, warnings, "vPIS", "infDps.valores.trib.tribFed.piscofins.vPis"),
             ["{{FED_COFINS}}"] = DanfeFallback.OrCurrency(vCOFINS, ptBR, warnings, "vCOFINS", "infDps.valores.trib.tribFed.piscofins.vCofins"),
             ["{{FED_CSLL}}"] = DanfeFallback.OrCurrency(vCSLL, ptBR, warnings, "vCSLL", "infDps.valores.trib.tribFed.vRetCSLL"),
             ["{{FED_CP}}"] = DanfeFallback.OrCurrency(vCP, ptBR, warnings, "vCP", "infDps.valores.trib.tribFed.vRetCP"),
-            ["{{FED_RET_PISCOFINS}}"] = GetDescricaoTipoRetencaoPisCofins(infDps.valores?.trib?.tribFed?.piscofins?.tpRetPisCofins),
-            ["{{FED_TOTAL}}"] = DanfeFallback.OrCurrency(vTotTribFed, ptBR, warnings, "vTotTribFed", "infDps.valores.trib.totTrib.vTotTrib.vTotTribFed"),
+            ["{{FED_RET_PISCOFINS}}"] = GetDescricaoTipoRetencaoPisCofins(tpRetPisCofins, warnings),
 
             // Bloco suprimível de Tributação IBS/CBS
             ["{{BLOCO_IBSCBS}}"] = blocoIbsCbs,
@@ -346,9 +341,7 @@ public sealed class DanfeHtmlRenderer
             ["{{VALOR_LIQUIDO}}"] = DanfeFallback.OrCurrency(vLiq, ptBR, warnings, "vLiq", "infNFSe.valores.vLiq"),
             ["{{DESC_COND}}"] = vDescCond != 0 ? vDescCond.ToString("C", ptBR) : "R$",
             ["{{DESC_INCOND}}"] = vDescIncond != 0 ? vDescIncond.ToString("C", ptBR) : "R$",
-            ["{{TOTAL_RETENCOES}}"] = (tpRetIssqn == 2 ? (vIssqn ?? 0M) : 0M) is var totalRet && (totalRet + vTotalRetFed + vRetPisCofins) != 0
-                ? (totalRet + vTotalRetFed + vRetPisCofins).ToString("C", ptBR)
-                : "-",
+            ["{{TOTAL_RETENCOES}}"] = vTotalRet?.ToString("C", ptBR) ?? "-",
             ["{{TOTAL_IBSCBS}}"] = vTotalIbsCbs.HasValue ? vTotalIbsCbs.Value.ToString("C", ptBR) : "-",
             ["{{VALOR_LIQUIDO_IBSCBS}}"] = vTotNF.HasValue ? vTotNF.Value.ToString("C", ptBR) : "-",
 
@@ -359,34 +352,22 @@ public sealed class DanfeHtmlRenderer
             ["{{BLOCO_CANHOTO}}"] = blocoCanhoto,
         };
 
-        // Aplica os replaces
-        foreach (var kv in map)
+        // Passada única sobre o template: o valor substituído nunca é reprocessado, então texto do XML no formato
+        // {{...}} chega intacto ao DANFS-e. Placeholders desconhecidos (de templates customizados) são preservados,
+        // exceto os aposentados pela NT-008 v1.02, que são removidos com aviso.
+        template = PlaceholderDoTemplate.Replace(template, m =>
         {
-            bool isRawHtml =
-                kv.Key == "{{SERV_DESC_HTML}}" ||
-                kv.Key == "{{INF_COMPLEMENTARES}}" ||
-                kv.Key == "{{NFSE_CANCELADA_DIV}}" ||
-                kv.Key == "{{NFSE_SUBSTITUIDA_DIV}}" ||
-                kv.Key == "{{BLOCO_TOMADOR}}" ||
-                kv.Key == "{{BLOCO_DESTINATARIO}}" ||
-                kv.Key == "{{BLOCO_INTERMEDIARIO}}" ||
-                kv.Key == "{{BLOCO_TRIB_MUNICIPAL}}" ||
-                kv.Key == "{{BLOCO_IBSCBS}}" ||
-                kv.Key == "{{BLOCO_CANHOTO}}";
+            if (map.TryGetValue(m.Value, out var valor))
+                return PlaceholdersHtml.Contains(m.Value) ? valor ?? string.Empty : Helper.HtmlEncode(valor ?? string.Empty);
 
-            string value = isRawHtml ? kv.Value : Helper.HtmlEncode(kv.Value);
-            template = template.Replace(kv.Key, value ?? string.Empty);
-        }
-
-        // Detecta placeholders não resolvidos (opcional, mas recomendado)
-        foreach (var placeholder in map.Keys)
-        {
-            if (template.Contains(placeholder))
+            if (PlaceholdersAposentados.Contains(m.Value))
             {
-                warnings.TemplatePlaceholderEmpty(placeholder);
-                template = template.Replace(placeholder, string.Empty);
+                warnings.TemplatePlaceholderEmpty(m.Value);
+                return string.Empty;
             }
-        }
+
+            return m.Value;
+        });
 
         return (template, warnings.Warnings);
     }
@@ -608,7 +589,72 @@ public sealed class DanfeHtmlRenderer
           <div style=""border-top: 1px solid #000; margin: 0 5px""></div>";
     }
 
-    private static string BuildIbsCbsBloco(InfDPS infDps, InfNFSe inf, CultureInfo ptBR, DanfeWarningCollector warnings)
+    // NT-008 v1.02: cIndOp / cLocalidadeIncid / xLocalidadeIncid / UF. cIndOp vem de infNFSe/IBSCBS e, se ausente,
+    // de infNFSe/DPS/infDPS/IBSCBS; a localidade de incidência vem sempre de infNFSe/IBSCBS.
+    private static string BuildIndicadorOperacao(InfDPS infDps, InfNFSe inf, DanfeWarningCollector warnings)
+    {
+        var apurado = inf.IBSCBS;
+        var cIndOp = (!string.IsNullOrWhiteSpace(apurado?.cIndOp) ? apurado!.cIndOp : infDps.IBSCBS?.cIndOp)?.Trim();
+        var cLocalidade = apurado?.cLocalidadeIncid?.Trim();
+        var xLocalidade = apurado?.xLocalidadeIncid?.Trim();
+
+        var uf = ObterMunicipio(cLocalidade, "infNFSe.IBSCBS.cLocalidadeIncid", warnings)?.Uf;
+
+        // Alguns emissores já trazem a UF em xLocalidadeIncid ("Município - SC", "Município/SC", "Município (SC)").
+        if (!string.IsNullOrEmpty(uf) && xLocalidade != null)
+        {
+            var sufixo = SufixoUf.Match(xLocalidade);
+            if (sufixo.Success && string.Equals(sufixo.Groups["uf"].Value, uf, StringComparison.OrdinalIgnoreCase))
+                xLocalidade = sufixo.Index > 0 ? xLocalidade.Substring(0, sufixo.Index) : xLocalidade;
+        }
+
+        var partes = new[]
+        {
+            DanfeFallback.OrDash(cIndOp, warnings, "cIndOp", "infNFSe.IBSCBS.cIndOp | infNFSe.DPS.infDPS.IBSCBS.cIndOp"),
+            DanfeFallback.OrDash(cLocalidade, warnings, "cLocalidadeIncid", "infNFSe.IBSCBS.cLocalidadeIncid"),
+            DanfeFallback.OrDash(xLocalidade, warnings, "xLocalidadeIncid", "infNFSe.IBSCBS.xLocalidadeIncid"),
+            string.IsNullOrWhiteSpace(uf) ? "-" : uf!,
+        };
+
+        return string.Join(" / ", partes);
+    }
+
+    // Código IBGE do XML → município. Ausente: null sem aviso (o chamador decide); não numérico ou fora da
+    // tabela: MUNICIPIO_NOT_FOUND; tabela não carregada (AutoInitializeMunicipios = false): aviso próprio.
+    private static MunicipiosIbge.Municipio? ObterMunicipio(string? codigo, string path, DanfeWarningCollector warnings)
+    {
+        codigo = codigo?.Trim();
+        if (string.IsNullOrEmpty(codigo)) return null;
+
+        if (!int.TryParse(codigo, NumberStyles.None, CultureInfo.InvariantCulture, out var codigoIbge))
+        {
+            warnings.MunicipioNotFound(path);
+            return null;
+        }
+
+        try
+        {
+            var municipio = MunicipiosIbge.GetMunicipio(codigoIbge);
+            if (municipio == null) warnings.MunicipioNotFound(path);
+            return municipio;
+        }
+        catch (InvalidOperationException)
+        {
+            warnings.GenericWarning($"Tabela de municípios do IBGE não inicializada; {path} não resolvido.");
+            return null;
+        }
+    }
+
+    private static void AvisarDataHoraInvalida(DateTimeOffset? valor, string? original, string campo, string path, DanfeWarningCollector warnings)
+    {
+        if (valor.HasValue) return;
+        if (string.IsNullOrWhiteSpace(original))
+            warnings.FieldMissing(campo, path);
+        else
+            warnings.GenericWarning($"{campo} '{original}' não reconhecido como data/hora");
+    }
+
+    private static string BuildIbsCbsBloco(InfDPS infDps, InfNFSe inf, decimal exclusoesReducoes, CultureInfo ptBR, DanfeWarningCollector warnings)
     {
         var gIBSCBS = infDps.IBSCBS?.valores?.trib?.gIBSCBS;
         var apurado = inf.IBSCBS;
@@ -620,12 +666,9 @@ public sealed class DanfeHtmlRenderer
                 : null,
             warnings, "CST/cClassTrib", "infNFSe.DPS.InfDPS.valores.trib.gIBSCBS"));
 
-        var indicadorOperacao = HtmlHelperEncode(DanfeFallback.OrDash(apurado?.cIndOp, warnings, "Indicador de Operação", "infNFSe.IBSCBS.cIndOp"));
-        var municipioIncidencia = HtmlHelperEncode(DanfeFallback.OrDash(
-            !string.IsNullOrWhiteSpace(apurado?.xLocalidadeIncid) ? apurado!.xLocalidadeIncid : null,
-            warnings, "Município Incidência IBS/CBS", "infNFSe.IBSCBS.cLocalidadeIncid/xLocalidadeIncid"));
+        var indicadorOperacao = HtmlHelperEncode(BuildIndicadorOperacao(infDps, inf, warnings));
 
-        var exclusoesReducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(valoresApurados?.vCalcReeRepRes, ptBR, warnings, "vCalcReeRepRes", "infNFSe.IBSCBS.valores.vCalcReeRepRes"));
+        var exclusoesReducoesTexto = HtmlHelperEncode(exclusoesReducoes.ToString("C", ptBR));
         var baseCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(valoresApurados?.vBC, ptBR, warnings, "vBC", "infNFSe.IBSCBS.valores.vBC"));
 
         var redAliquotas = HtmlHelperEncode(FormatTresPercentuais(
@@ -647,13 +690,12 @@ public sealed class DanfeHtmlRenderer
               <table style=""width: 100%; border-collapse: collapse"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">CST / cClassTrib</span><br />{cstCClassTrib}</td>
-                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Indicador de Operação</span><br />{indicadorOperacao}</td>
-                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Código IBGE Incidência / Município Incidência / Sigla UF</span><br />{municipioIncidencia}</td>
+                  <td style=""vertical-align: top; width: 75%""><span class=""label"" style=""font-weight: bold"">Indicador de Operação / Código IBGE Incidência / Município Incidência / Sigla UF</span><br />{indicadorOperacao}</td>
                 </tr>
               </table>
               <table style=""width: 100%; border-collapse: collapse; margin-top: 1px"">
                 <tr>
-                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Exclusões e Reduções da Base de Cálculo</span><br />{exclusoesReducoes}</td>
+                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Exclusões e Reduções da Base de Cálculo</span><br />{exclusoesReducoesTexto}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Base de Cálculo Após Exclusões e Reduções</span><br />{baseCalculo}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Red. Alíquota IBS UF / IBS Mun / CBS</span><br />{redAliquotas}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Alíquota IBS UF / IBS Mun</span><br />{aliqIbsUfMun}</td>
@@ -814,29 +856,20 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private static string GetDescricaoTipoRetencaoPisCofins(int? tpRetPisCofins)
+    // NT-008 v1.02: tabela vigente do leiaute nacional (TpRetPisCofins é a fonte única da classificação).
+    private static string GetDescricaoTipoRetencaoPisCofins(int? tpRetPisCofins, DanfeWarningCollector warnings)
     {
-        /*
-           Tipo de retenção ao do PIS/COFINS:
+        if (!tpRetPisCofins.HasValue) return "-";
 
-            1 - PIS/COFINS Retido;
-            2 - PIS/COFINS Não Retido;
-            3 - PIS Retido/COFINS Não Retido;
-            4 - PIS Não Retido/COFINS Retido;
-         */
-        switch (tpRetPisCofins)
+        var descricao = TpRetPisCofins.Descricao(tpRetPisCofins);
+        if (descricao == null)
         {
-            case 1:
-                return "PIS/COFINS Retido";
-            case 2:
-                return "PIS/COFINS Não Retido";
-            case 3:
-                return "PIS Retido/COFINS Não Retido";
-            case 4:
-                return "PIS Não Retido/COFINS Retido";
-            default:
-                return "-";
+            warnings.GenericWarning($"tpRetPisCofins '{tpRetPisCofins}' não previsto na tabela vigente do leiaute nacional");
+            return "-";
         }
+
+        // DANFS-e oficial: "{código} {descrição}" (ex.: "3 PIS/COFINS/CSLL Retidos").
+        return $"{tpRetPisCofins} {descricao}";
     }
 
     private static string GetDescricaoTributacao(int? tribISSQN)
@@ -996,26 +1029,23 @@ public sealed class DanfeHtmlRenderer
         return "Regular";
     }
 
-    private static string GetDescricaoFinalidade(long? finNFSe)
+    private static string GetDescricaoFinalidade(long? finNFSe, bool possuiIbsCbs, DanfeWarningCollector warnings)
     {
         /*
-           Finalidade da emissão da NFS-e (leiaute nacional):
-            1 - NFS-e normal;
-            2 - NFS-e complementar;
-            3 - NFS-e de ajuste;
-            4 - NFS-e de Decisão Judicial ou Administrativa.
+           Finalidade da emissão da NFS-e (leiaute nacional vigente, grupo IBSCBS — NT-008 v1.02):
+            0 - NFS-e regular.
+           A enumeração antiga (1 a 4) não pertence ao leiaute vigente e não é mais interpretada.
          */
         switch (finNFSe)
         {
-            case 1:
-                return "NFS-e Normal";
-            case 2:
-                return "NFS-e Complementar";
-            case 3:
-                return "NFS-e de Ajuste";
-            case 4:
-                return "NFS-e de Decisão Judicial ou Administrativa";
+            case null:
+                if (possuiIbsCbs)
+                    warnings.FieldMissing("finNFSe", "infNFSe.DPS.infDPS.IBSCBS.finNFSe | infNFSe.IBSCBS.finNFSe");
+                return "-";
+            case 0:
+                return "NFS-e regular";
             default:
+                warnings.GenericWarning($"finNFSe '{finNFSe}' não previsto na enumeração vigente do leiaute nacional");
                 return "-";
         }
     }
