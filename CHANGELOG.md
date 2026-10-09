@@ -1,3 +1,38 @@
+## [1.3.0.0] - 2026-10-09
+
+Entrega referente ao item **#2370280** (Redmine), feedback da análise #2366209 (NFS-e Nacional —
+DANFS-e — Campos Fiscais Divergentes da NT 008 v1.02, revisão pelo leiaute vigente).
+
+### Correções
+- **4.2 — Composição do bloco federal por código**: com `tpRetPisCofins = 1` (formato legado),
+  Contribuições Sociais - Retidas = `vRetCSLL + vPis + vCofins` e PIS/COFINS Débito Apuração Própria
+  saem `R$ 0,00`; com qualquer outro código (ou sem código), `vRetCSLL`, `vPis` e `vCofins` como
+  informados. A fórmula de Exclusões e Reduções (4.4) continua usando `vPis`/`vCofins` do XML.
+- **4.1 — Descrição Contrib. Sociais - Retidas**: as dez opções do leiaute (0 a 9), no formato
+  `"{código} - {descrição}"` (ex.: `3 - PIS/COFINS/CSLL Retidos`), com o texto do Anexo I; 0 e 2
+  deixam de sair `-`.
+- **4.9.1 — Regime Especial de Tributação**: cobre o código 9 (Outros).
+- **4.9.2 — Situação da NFS-e**: descrição do `cStat` do XML (100, 101, 102, 103, 107), cortada em 37
+  caracteres com `...`; deixa de sair Regular/Cancelada/Substituída (a marca d'água continua).
+- **4.9.3 — Emitente da NFS-e**: `Prestador`, `Tomador`, `Intermediário`.
+- **4.9.4 — Benefício Municipal / Cálculo do BM**: `tpBM` como gravado no XML; Cálculo do BM =
+  `infNFSe/valores/vCalcBM` ou, na falta, `BM/vRedBCBM` da DPS; `-` sem benefício.
+- **4.10 — Ambiente Gerador / Tipo de Ambiente**: o código do XML (`ambGer`, `tpAmb`). O aviso de
+  validade jurídica e o QR Code continuam decididos pelo ambiente informado na geração.
+- **4.11.1 — Código da NBS**: formato `n.nnnn.nn.nn`; `-` sem `cNBS`.
+- **4.11.2 — Código de Tributação**: campo único `nn.nn.nn / cTribMun` (`-` sem `cTribMun`) e a
+  descrição (`xTribMun`, senão `xTribNac`) em linha própria, sem rótulo, cortada em 167 caracteres
+  com `...`.
+
+### Mudanças de API pública
+- `TpRetPisCofins.Descricao` passa a cobrir os dez códigos (inclusive 0 e 2) e os textos seguem o
+  Anexo I. A classificação (`EhSuportado`, `RetemPis/Cofins/Csll`, `CodigosSuportados`) não muda.
+
+### Template
+- `{{SERV_CTRIBNAC}}` passa a ser o campo único Nacional/Municipal; novo `{{SERV_CTRIB_DESC}}`
+  (descrição em linha própria); `{{SERV_CTRIBMUN}}` aposentado (removido com aviso em templates
+  customizados).
+
 ## [1.2.0.0] - 2026-10-06
 
 Entrega referente ao item **#2366405** (Redmine), da análise #2366209 (NFS-e Nacional — DANFS-e —

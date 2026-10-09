@@ -34,6 +34,21 @@ public class TpRetPisCofinsTests
         Assert.False(TpRetPisCofins.RetemPis(codigo));
         Assert.False(TpRetPisCofins.RetemCofins(codigo));
         Assert.False(TpRetPisCofins.RetemCsll(codigo));
+    }
+
+    [Theory]
+    [InlineData(0, "PIS/COFINS/CSLL Não Retidos")]
+    [InlineData(2, "PIS/COFINS Não Retido")]
+    public void Descricao_CodigoSemClassificacao_TemTextoDoLeiaute(int codigo, string esperado)
+    {
+        Assert.Equal(esperado, TpRetPisCofins.Descricao(codigo));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(10)]
+    public void Descricao_CodigoForaDoLeiaute_RetornaNull(int? codigo)
+    {
         Assert.Null(TpRetPisCofins.Descricao(codigo));
     }
 

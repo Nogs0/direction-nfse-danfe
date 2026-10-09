@@ -31,7 +31,7 @@ public sealed class DanfeHtmlRenderer
     };
 
     // Campos removidos do leiaute (NT-008 v1.02) que ainda podem existir em templates customizados.
-    private static readonly HashSet<string> PlaceholdersAposentados = new HashSet<string> { "{{FED_TOTAL}}" };
+    private static readonly HashSet<string> PlaceholdersAposentados = new HashSet<string> { "{{FED_TOTAL}}", "{{SERV_CTRIBMUN}}" };
 
     public DanfeHtmlRenderer(DanfeOptions options)
     {
@@ -106,20 +106,13 @@ public sealed class DanfeHtmlRenderer
 
         var ptBR = new CultureInfo("pt-BR");
 
-        // Tributação (se ficar vazio, warning)
-        var cTribNac = infDps.serv?.cServ?.cTribNac;
-        var xTribNac = inf.xTribNac;
-
-        var descricaoTributoNacional = $"{Regex.Replace(cTribNac ?? string.Empty, @"(\d{2})(\d{2})(\d{2})", "$1.$2.$3")} - {xTribNac}";
-
-        if (string.IsNullOrWhiteSpace(cTribNac) && string.IsNullOrWhiteSpace(xTribNac)) warnings.FieldMissing("cTribNac/xTribNac", "infNFSe.DPS.InfDPS.serv.cServ.cTribNac | infNFSe.xTribNac", "-");
-
-        var cTribMun = infDps.serv?.cServ?.cTribMun;
-        var xTribMun = inf.xTribMun;
-
-        var descricaoTributoMunicipal = string.IsNullOrWhiteSpace(cTribMun) ? (xTribMun ?? string.Empty) : $"{cTribMun} - {xTribMun}";
-
-        if (string.IsNullOrWhiteSpace(descricaoTributoMunicipal)) warnings.FieldMissing("cTribMun/xTribMun", "infNFSe.DPS.InfDPS.serv.cServ.cTribMun | infNFSe.xTribMun", "-");
+        // NT-008 v1.02 (4.11.2): "nn.nn.nn / cTribMun" num campo único; a descrição (xTribMun, senão xTribNac)
+        // sai em linha própria, sem rótulo, cortada em 167 caracteres.
+        var cTribNac = infDps.serv?.cServ?.cTribNac?.Trim();
+        var cTribMun = infDps.serv?.cServ?.cTribMun?.Trim();
+        var codigoTributacao = $"{DanfeFallback.OrDash(FormatarCodigoTributacaoNacional(cTribNac), warnings, "cTribNac", "infNFSe.DPS.InfDPS.serv.cServ.cTribNac")} / {DanfeFallback.OrDash(cTribMun)}";
+        var descricaoTributacao = !string.IsNullOrWhiteSpace(inf.xTribMun) ? inf.xTribMun!.Trim() : inf.xTribNac?.Trim();
+        if (string.IsNullOrWhiteSpace(descricaoTributacao)) warnings.FieldMissing("xTribMun/xTribNac", "infNFSe.xTribMun | infNFSe.xTribNac", "-");
 
         // QRCode (NT-008 2.4.3: dimensões mínimas 1,52cm x 1,52cm)
         string url = $"https://www.{(isProd ? "" : "producaorestrita.")}nfse.gov.br/ConsultaPublica/?tpc=1&chave={chaveAcesso}";
@@ -167,9 +160,20 @@ public sealed class DanfeHtmlRenderer
         decimal? vCOFINS = infDps.valores?.trib?.tribFed?.piscofins?.vCofins;
         decimal? vPIS = infDps.valores?.trib?.tribFed?.piscofins?.vPis;
         decimal? vCP = infDps.valores?.trib?.tribFed?.vRetCP;
-        // NT-008: vRetCSLL é o valor de "Contribuições Sociais - Retidas" e, conforme tpRetPisCofins, pode ser a CSLL
-        // isolada ou o agregado PIS+COFINS+CSLL — é impresso como informado, sem somar PIS/COFINS de novo.
         decimal? vCSLL = infDps.valores?.trib?.tribFed?.vRetCSLL;
+
+        // NT-008 v1.02 (4.2): com tpRetPisCofins = 1 (formato legado) o PIS/COFINS informado é retido, então
+        // "Contribuições Sociais - Retidas" = vRetCSLL + vPis + vCofins e os débitos de apuração própria saem zerados.
+        // Com qualquer outro código (ou sem código), vRetCSLL, vPis e vCofins são impressos como informados.
+        decimal? fedRetidas = vCSLL, fedPis = vPIS, fedCofins = vCOFINS;
+        if (tpRetPisCofins == 1)
+        {
+            fedRetidas = vCSLL.HasValue || vPIS.HasValue || vCOFINS.HasValue
+                ? (vCSLL ?? 0M) + (vPIS ?? 0M) + (vCOFINS ?? 0M)
+                : (decimal?)null;
+            fedPis = 0M;
+            fedCofins = 0M;
+        }
         string? outInf = inf.valores?.xOutInf;
 
         // NT-008 2.4.5: Total das Retenções reproduz a tag consolidada do XML, sem recomposição.
@@ -278,8 +282,10 @@ public sealed class DanfeHtmlRenderer
             ["{{NFSE_LOGO}}"] = logoNfse ?? TransparentPixelBase64,
             ["{{VALIDADE_JURIDICA}}"] = validade,
             ["{{CAB_MUNICIPIO}}"] = municipioEmitente,
-            ["{{CAB_AMBIENTE_GERADOR}}"] = GetDescricaoAmbienteGerador(inf.ambGer),
-            ["{{CAB_TIPO_AMBIENTE}}"] = isProd ? "Produção" : "Produção Restrita (Homologação)",
+            // NT-008 v1.02 (4.10): um caractere cada, o código do XML (como no DANFS-e oficial). O aviso de validade
+            // jurídica e o QR Code continuam decididos pelo ambiente informado na geração.
+            ["{{CAB_AMBIENTE_GERADOR}}"] = CodigoOuTraco(inf.ambGer, warnings, "ambGer", "infNFSe.ambGer"),
+            ["{{CAB_TIPO_AMBIENTE}}"] = CodigoOuTraco(infDps.tpAmb, warnings, "tpAmb", "infNFSe.DPS.InfDPS.tpAmb"),
             ["{{CHAVE_ACESSO}}"] = DanfeFallback.OrDash(chaveAcesso, warnings, fieldName: "chaveAcesso", path: "infNFSe.Id"),
 
             // QrCode
@@ -293,7 +299,7 @@ public sealed class DanfeHtmlRenderer
             ["{{DATA_HORA_EMISSAO}}"] = dhEmissaoNfs?.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture) ?? "-",
             ["{{DATA_HORA_EMISSAO_DPS}}"] = dhEmissaoDps?.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture) ?? "-",
             ["{{EMITENTE_NFSE}}"] = GetDescricaoEmitente(infDps.tpEmit),
-            ["{{SITUACAO_NFSE}}"] = GetDescricaoSituacao(isCancelled, isReplaced),
+            ["{{SITUACAO_NFSE}}"] = GetDescricaoSituacao(inf.cStat, warnings),
             ["{{FINALIDADE_NFSE}}"] = GetDescricaoFinalidade(infDps.IBSCBS?.finNFSe ?? inf.IBSCBS?.finNFSe, possuiIbsCbs, warnings),
 
             // Prestador
@@ -315,9 +321,9 @@ public sealed class DanfeHtmlRenderer
             ["{{BLOCO_INTERMEDIARIO}}"] = blocoIntermediario,
 
             // Serviço
-            ["{{SERV_CTRIBNAC}}"] = DanfeFallback.OrDash(descricaoTributoNacional, warnings, "Descrição Tributo Nacional", "infNFSe.DPS.InfDPS.serv.cServ.cTribNac | infNFSe.xTribNac").Limit(80),
-            ["{{SERV_CTRIBMUN}}"] = DanfeFallback.OrDash(descricaoTributoMunicipal, warnings, "Descrição Tributo Municipal", "infNFSe.DPS.InfDPS.serv.cServ.cTribMun | infNFSe.xTribMun").Limit(80),
-            ["{{SERV_NBS}}"] = DanfeFallback.OrDash(infDps.serv?.cServ?.cNBS.ToString(), warnings, "cNBS", "infNFSe.DPS.InfDPS.serv.cServ.cNBS"),
+            ["{{SERV_CTRIBNAC}}"] = codigoTributacao,
+            ["{{SERV_CTRIB_DESC}}"] = string.IsNullOrWhiteSpace(descricaoTributacao) ? "-" : Helper.CortarComReticencias(descricaoTributacao!, 167),
+            ["{{SERV_NBS}}"] = FormatarNbs(infDps.serv?.cServ?.cNBS, warnings),
             ["{{SERV_DESC_HTML}}"] = Helper.BuildDescricaoServicoHtml(infDps.serv?.cServ?.xDescServ),
             ["{{SERV_LOCAL}}"] = DanfeFallback.OrDash(municipioPrestador?.NomeComUf, warnings, "Município Prestação", "MunicipiosIbge.GetMunicipio(cLocPrestacao).NomeComUf"),
             ["{{SERV_PAIS}}"] = DanfeFallback.OrDash(infDps.serv?.locPrest?.cPaisPrestacao, warnings, "País da Prestação", "infNFSe.DPS.InfDPS.serv.locPrest.cPaisPrestacao"),
@@ -327,9 +333,9 @@ public sealed class DanfeHtmlRenderer
 
             // Tributação Federal (exceto CBS)
             ["{{FED_IRRF}}"] = DanfeFallback.OrCurrency(vIRRF, ptBR, warnings, "vIRRF", "infDps.valores.trib.tribFed.vRetIRRF"),
-            ["{{FED_PIS}}"] = DanfeFallback.OrCurrency(vPIS, ptBR, warnings, "vPIS", "infDps.valores.trib.tribFed.piscofins.vPis"),
-            ["{{FED_COFINS}}"] = DanfeFallback.OrCurrency(vCOFINS, ptBR, warnings, "vCOFINS", "infDps.valores.trib.tribFed.piscofins.vCofins"),
-            ["{{FED_CSLL}}"] = DanfeFallback.OrCurrency(vCSLL, ptBR, warnings, "vCSLL", "infDps.valores.trib.tribFed.vRetCSLL"),
+            ["{{FED_PIS}}"] = DanfeFallback.OrCurrency(fedPis, ptBR, warnings, "vPIS", "infDps.valores.trib.tribFed.piscofins.vPis"),
+            ["{{FED_COFINS}}"] = DanfeFallback.OrCurrency(fedCofins, ptBR, warnings, "vCOFINS", "infDps.valores.trib.tribFed.piscofins.vCofins"),
+            ["{{FED_CSLL}}"] = DanfeFallback.OrCurrency(fedRetidas, ptBR, warnings, "vCSLL", "infDps.valores.trib.tribFed.vRetCSLL"),
             ["{{FED_CP}}"] = DanfeFallback.OrCurrency(vCP, ptBR, warnings, "vCP", "infDps.valores.trib.tribFed.vRetCP"),
             ["{{FED_RET_PISCOFINS}}"] = GetDescricaoTipoRetencaoPisCofins(tpRetPisCofins, warnings),
 
@@ -542,7 +548,8 @@ public sealed class DanfeHtmlRenderer
         var issBeneficio = HtmlHelperEncode(DanfeFallback.OrDash(valores?.tpBM, warnings, "Benefício Municipal", "infNFSe.valores.tpBM"));
         var issDescIncond = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"));
         var issDeducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"));
-        var issCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(tribMun?.BM?.vRedBCBM, ptBR, warnings, "vRedBCBM", "infNFSe.valores.trib.tribMun.BM.vRedBCBM"));
+        // NT-008 v1.02 (4.9.4): tpBM já vem descrito pelo ADN; Cálculo do BM = vCalcBM ou, na falta, vRedBCBM da DPS.
+        var issCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(valores?.vCalcBM ?? tribMun?.BM?.vRedBCBM, ptBR, warnings, "vCalcBM/vRedBCBM", "infNFSe.valores.vCalcBM | infNFSe.DPS.InfDPS.valores.trib.tribMun.BM.vRedBCBM"));
         var issBc = HtmlHelperEncode(vServico.ToString("C", ptBR));
         var issAliq = HtmlHelperEncode(DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic"));
         var issRetencao = HtmlHelperEncode(GetDescricaoRetencao(tpRetIssqn));
@@ -856,7 +863,7 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    // NT-008 v1.02: tabela vigente do leiaute nacional (TpRetPisCofins é a fonte única da classificação).
+    // NT-008 v1.02 (4.1): dez opções do leiaute vigente (TpRetPisCofins é a fonte única da tabela).
     private static string GetDescricaoTipoRetencaoPisCofins(int? tpRetPisCofins, DanfeWarningCollector warnings)
     {
         if (!tpRetPisCofins.HasValue) return "-";
@@ -868,8 +875,8 @@ public sealed class DanfeHtmlRenderer
             return "-";
         }
 
-        // DANFS-e oficial: "{código} {descrição}" (ex.: "3 PIS/COFINS/CSLL Retidos").
-        return $"{tpRetPisCofins} {descricao}";
+        // DANFS-e oficial: "{código} - {descrição}" (ex.: "3 - PIS/COFINS/CSLL Retidos").
+        return $"{tpRetPisCofins} - {descricao}";
     }
 
     private static string GetDescricaoTributacao(int? tribISSQN)
@@ -894,9 +901,9 @@ public sealed class DanfeHtmlRenderer
         switch (tpEmis)
         {
             case 1:
-                return "Prestador do Serviço";
+                return "Prestador";
             case 2:
-                return "Tomador do Serviço";
+                return "Tomador";
             case 3:
                 return "Intermediário";
             default:
@@ -949,6 +956,7 @@ public sealed class DanfeHtmlRenderer
             4 - Notário ou Registrador;
             5 - Profissional Autônomo;
             6 - Sociedade de Profissionais;
+            9 - Outros;
          */
         switch (regEspTrib)
         {
@@ -966,6 +974,8 @@ public sealed class DanfeHtmlRenderer
                 return "Profissional Autônomo";
             case 6:
                 return "Sociedade de Profissionais";
+            case 9:
+                return "Outros";
             default:
                 return "-";
         }
@@ -1022,11 +1032,27 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    private static string GetDescricaoSituacao(bool isCancelled, bool isReplaced)
+    // NT-008 v1.02 (4.9.2): descrição do cStat do XML, até 37 caracteres. Cancelada/substituída é indicada só
+    // pela marca d'água.
+    private static string GetDescricaoSituacao(long cStat, DanfeWarningCollector warnings)
     {
-        if (isCancelled) return "Cancelada";
-        if (isReplaced) return "Substituída";
-        return "Regular";
+        string? descricao = cStat switch
+        {
+            100 => "NFS-e Gerada",
+            101 => "NFS-e de Substituição Gerada",
+            102 => "NFS-e de Decisão Judicial ou Administrativa",
+            103 => "NFS-e Avulsa",
+            107 => "NFS-e MEI",
+            _ => null,
+        };
+
+        if (descricao == null)
+        {
+            warnings.GenericWarning($"cStat '{cStat}' não previsto no leiaute nacional");
+            return "-";
+        }
+
+        return Helper.CortarComReticencias(descricao, 37);
     }
 
     private static string GetDescricaoFinalidade(long? finNFSe, bool possuiIbsCbs, DanfeWarningCollector warnings)
@@ -1050,20 +1076,31 @@ public sealed class DanfeHtmlRenderer
         }
     }
 
-    // NOTA: descrição best-effort com base em documentação pública do Sistema Nacional NFS-e;
-    // confirmar contra o XSD/manual oficial da DPS antes de publicar em produção.
-    private static string GetDescricaoAmbienteGerador(long ambGer)
+    private static string CodigoOuTraco(long codigo, DanfeWarningCollector warnings, string campo, string path)
     {
-        switch (ambGer)
-        {
-            case 1:
-                return "Sistema Próprio do Município";
-            case 2:
-                return "Sistema Nacional (Sefin Nacional)";
-            case 3:
-                return "Ambiente Nacional (ADN)";
-            default:
-                return "-";
-        }
+        if (codigo > 0) return codigo.ToString(CultureInfo.InvariantCulture);
+        warnings.FieldMissing(campo, path, "-");
+        return "-";
     }
+
+    // NT-008 v1.02 (4.11.1): n.nnnn.nn.nn; ausente (0), "-".
+    private static string FormatarNbs(long? cNBS, DanfeWarningCollector warnings)
+    {
+        if (!cNBS.HasValue || cNBS.Value <= 0)
+        {
+            warnings.FieldMissing("cNBS", "infNFSe.DPS.InfDPS.serv.cServ.cNBS", "-");
+            return "-";
+        }
+
+        var digitos = cNBS.Value.ToString("D9", CultureInfo.InvariantCulture);
+        return digitos.Length == 9
+            ? $"{digitos.Substring(0, 1)}.{digitos.Substring(1, 4)}.{digitos.Substring(5, 2)}.{digitos.Substring(7, 2)}"
+            : digitos;
+    }
+
+    // NT-008 v1.02 (4.11.2): nn.nn.nn; fora de 6 dígitos, como informado.
+    private static string? FormatarCodigoTributacaoNacional(string? cTribNac) =>
+        cTribNac != null && Regex.IsMatch(cTribNac, @"^\d{6}$")
+            ? $"{cTribNac.Substring(0, 2)}.{cTribNac.Substring(2, 2)}.{cTribNac.Substring(4, 2)}"
+            : cTribNac;
 }

@@ -175,6 +175,10 @@ namespace Direction.NFSe.Danfe
             return corte + "...";
         }
 
+        // NT-008 v1.02 (tabela de campos): acima do tamanho do campo, os N primeiros caracteres seguidos de "...".
+        public static string CortarComReticencias(string texto, int maxChars) =>
+            texto.Length <= maxChars ? texto : texto.Substring(0, maxChars) + "...";
+
         internal static string? GetLogo(string logoPath)
         {
             if (!File.Exists(logoPath)) return null;
