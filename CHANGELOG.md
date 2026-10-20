@@ -1,3 +1,73 @@
+## [1.4.0.0] - 2026-10-19
+
+Entrega referente ao item **#2371321** (Redmine), feedback da análise #2366209 (NFS-e Nacional —
+DANFS-e — Campos Fiscais Divergentes da NT 008 v1.02, revisão pelo leiaute vigente): itens 4.9.5 a 4.14.
+
+### Correções
+- **4.9.5 — Simples Nacional na Data de Competência / Regime de Apuração Tributária pelo SN**:
+  `opSimpNac` e `regApTribSN` passam a sair com o texto do Anexo I. `opSimpNac` (1 `Não Optante`,
+  2 `Optante - Microempreendedor Individual (MEI)`, 3 `Optante - Microempresa ou Empresa de Pequeno
+  Porte (ME/EPP)`) é cortado em 37 caracteres + `...`; `regApTribSN` (1, 2 e 3) é cortado em 77
+  caracteres + `...` (ex.: `Regime de apuração dos tributos federais e municipal pelo SN`). Sem a tag, `-`.
+- **4.9.6 — Tipo de Imunidade / Suspensão da Exigibilidade do ISSQN**: `tpImunidade` (0 a 5) sai com o
+  texto do Anexo I cortado em 37 caracteres + `...` (o código 0 deixa de sair `Nenhum`); `tpSusp` sai
+  `Exigibilidade Suspensa por Decisão Ju...` (1) ou `Exigibilidade Suspensa por Processo A...` (2).
+  Sem a tag ou com outro valor, `-`.
+- **4.11.3 — Local da Prestação / Sigla UF / País**: `Município / UF / País`, com a UF pela tabela do
+  IBGE e o país vindo de `cPaisPrestacao` (ISO, 2 letras); sem país, `-`. O campo mantém as três
+  partes: sem `cLocPrestacao` (ou fora da tabela), sai `- / - / País` (ex.: `- / - / US`).
+- **4.12.1 — Bloco Prestador / Fornecedor**: nome e endereço vêm de `DPS/infDPS/prest` (`xNome` e grupo
+  `end`) quando a DPS os traz; sem eles, de `infNFSe/emit`. Município / Sigla UF e Código IBGE / CEP
+  saem do mesmo endereço exibido (não mais de `xLocEmi`, que segue só no cabeçalho).
+- **4.12.2 — Formato dos campos dos participantes**: Município / Sigla UF = `Nome / UF` no prestador,
+  tomador, destinatário e intermediário (o cabeçalho sai `Município: Nome / UF`); Código IBGE / CEP =
+  `nnnnnnn / nn.nnn-nnn` (endereço no exterior mostra `cEndPost` como informado); Endereço =
+  `xLgr, nro, xCpl, xBairro` separados por vírgula, sem as partes ausentes, e Nome / Nome Empresarial
+  inteiro, ambos cortados em 77 caracteres + `...`.
+- **4.13.1 — Bloco Tributação Municipal (ISSQN)**: só `tribISSQN = 4` (Não Incidência) troca o bloco
+  pela frase `TRIBUTAÇÃO MUNICIPAL (ISSQN) - OPERAÇÃO NÃO SUJEITA AO ISSQN`; com 1, 2 ou 3 (inclusive
+  Imunidade e Exportação, e a tag ausente) o bloco é impresso com os campos; com a tag ausente (ou
+  fora de 1 a 4), "Tipo de Tributação do ISSQN" sai `-`. O DANFS-e de imunidade e de exportação
+  continua em uma única página.
+- **4.13.2 — BC ISSQN**: reproduz `infNFSe/valores/vBC`, sem recalcular a partir do valor do serviço;
+  sem a tag, `-`.
+- **4.13.3 — Total Deduções/Reduções**: `vDR` da DPS (senão `vCalcDR` da NFS-e) + `vCalcReeRepRes`
+  (`infNFSe/IBSCBS/valores`); parcela ausente vale 0 na soma e só sem as três sai `-`.
+- **4.13.4 — Município / Sigla UF / País de Incidência do ISSQN**: campo único
+  `xLocIncid / UF (IBGE) / cPaisResult`, no lugar de "Município de Incidência do ISSQN" e "País
+  Resultado da Prestação do Serviço". O nome vem de `xLocIncid` (senão da tabela do IBGE); o campo
+  mantém sempre as três partes e a parte ausente sai `-` (ex.: `- / - / US` sem `cLocIncid` e sem
+  `xLocIncid`).
+- **4.14 — Descontos, Red. Alíquota e Informações Complementares**: Desconto Incondicionado e
+  Condicionado saem em R$ quando o XML traz o valor (inclusive `R$ 0,00`) e `-` quando não traz (antes
+  `R$` vazio); Red. Alíquota IBS UF / IBS Mun / CBS sai com os três percentuais separados por ` / `,
+  `-` (sem `%`) no componente ausente; `Cod. Obra:` e `Insc. Imob.:` só saem com `cObra` e
+  `inscImobFisc` informados.
+
+### Mudanças de API pública
+- `VDedRed.vDR` passa de `decimal` para `decimal?`, com `ShouldSerializevDR()`: distingue `vDedRed` que
+  traz apenas `pDR` (vDR ausente) de `vDR` igual a 0. Consumidores que liam `vDR` como `decimal` precisam
+  tratar `null` (`vDR ?? 0M`).
+- `MunicipiosIbge.Municipio.NomeComUf` foi mantido sem alteração, de propósito: o novo formato
+  `Nome / UF` é montado no renderizador, sem mudar o contrato público.
+
+### Template
+- Nomes de placeholders inalterados; muda o conteúdo: `{{PREST_CEP}}` deixa de ser só o CEP e passa a
+  `Código IBGE / CEP`; `{{CAB_MUNICIPIO}}`, `{{PREST_MUNICIPIO}}` e `{{SERV_LOCAL}}` passam ao separador
+  ` / ` (`Município / UF`); `{{DESC_COND}}` e `{{DESC_INCOND}}` saem `-` (antes `R$` vazio) quando a tag
+  falta e `R$ 0,00` quando o zero é informado; `{{PREST_RAZAO}}` e `{{PREST_ENDERECO}}` são cortados em 77 caracteres com `...`. Templates
+  customizados (`DanfeOptions.TemplatePath`) que montavam esses campos por conta própria devem rever o
+  texto ao redor.
+
+### Diagnóstico
+- Passam a disparar `NFSE_FIELD_MISSING`: "Município Emitente" (só quando `xLocEmi` e a UF do emitente
+  faltam juntos; antes nunca disparava), "Cidade/Estado exterior" (endereço no exterior sem `xCidade` e
+  `xEstProvReg`), "cMun Prestador" (emitente sem `cMun`, quando o prestador sai de `infNFSe/emit`) e
+  `vBC` ausente em `infNFSe/valores` (a BC ISSQN deixou de ser recalculada).
+- Deixam de disparar: "Município Prestação" e "Município Incidência" (a ausência de `cLocPrestacao` e de
+  `cLocIncid` segue avisada pelos próprios campos) e `vDR` ausente (a composição de Deduções/Reduções
+  aceita parcelas ausentes).
+
 ## [1.3.0.0] - 2026-10-09
 
 Entrega referente ao item **#2370280** (Redmine), feedback da análise #2366209 (NFS-e Nacional —

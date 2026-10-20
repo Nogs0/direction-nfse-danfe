@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Xml.Linq;
 using System.Xml.Serialization;
 using Direction.NFSe.Danfe;
 using Xunit;
@@ -94,28 +96,49 @@ public class GoldenHtmlTests
         var renderer = new DanfeHtmlRenderer(new DanfeOptions());
         var (html, _) = renderer.Render(nfse, environment, isCancelled, isReplaced);
 
-        await using var pdfGenerator = new DanfePdfGenerator();
-        var browser = await pdfGenerator.GetBrowserAsync();
-        var page = await browser.NewPageAsync();
-        try
+        var height = await MedirAlturaAsync(html);
+        Assert.True(
+            height <= alturaMaximaComEncolhimento,
+            $"Conteúdo ({height}px) excede até o piso de encolhimento automático " +
+            $"({alturaMaximaComEncolhimento:F1}px) — o canhoto ou outro bloco ainda ficaria em uma " +
+            "2ª página mesmo com o ajuste automático de escala.");
+    }
+
+    // R20/CA19 (NT-008 v1.02, 4.13.1): com tribISSQN = 2 (Imunidade) ou 3 (Exportação) o bloco ISSQN
+    // completo passa a ser impresso (antes só a frase de operação não sujeita ao ISSQN) e, com nome e
+    // endereço do tomador acima do limite de 77 caracteres do leiaute (cortados com reticências), o
+    // documento com todos os blocos opcionais precisa continuar em uma única página A4.
+    [Trait("Category", "Integration")]
+    [Theory]
+    [InlineData("2")]
+    [InlineData("3")]
+    public async System.Threading.Tasks.Task BlocoIssqnImpresso_ImunidadeOuExportacao_CabeEmUmaUnicaPaginaA4(string tribIssqn)
+    {
+        var alturaMaximaComEncolhimento = DanfePdfGenerator.PageContentHeightPx / DanfePdfGenerator.MinScale;
+        var textoLongo = new string('A', 90) + " " + new string('B', 40);
+
+        var xml = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Fixtures", "nfse-completa.xml"));
+        var tribMun = xml.Descendants().Single(e => e.Name.LocalName == "tribMun" && e.Ancestors().Any(a => a.Name.LocalName == "DPS"));
+        var ns = tribMun.Name.Namespace;
+        tribMun.Element(ns + "tribISSQN")!.Value = tribIssqn;
+        if (tribIssqn == "2")
         {
-            await page.SetViewportAsync(new PuppeteerSharp.ViewPortOptions
-            {
-                Width = (int)Math.Round(DanfePdfGenerator.PageContentWidthPx),
-                Height = (int)Math.Round(DanfePdfGenerator.PageContentHeightPx)
-            });
-            await page.SetContentAsync(html);
-            var height = await page.EvaluateExpressionAsync<double>("document.body.scrollHeight");
-            Assert.True(
-                height <= alturaMaximaComEncolhimento,
-                $"Conteúdo ({height}px) excede até o piso de encolhimento automático " +
-                $"({alturaMaximaComEncolhimento:F1}px) — o canhoto ou outro bloco ainda ficaria em uma " +
-                "2ª página mesmo com o ajuste automático de escala.");
+            tribMun.Element(ns + "tribISSQN")!.AddAfterSelf(new XElement(ns + "tpImunidade", "4"));
         }
-        finally
-        {
-            await page.CloseAsync();
-        }
+
+        var toma = xml.Descendants().Single(e => e.Name.LocalName == "toma" && e.Ancestors().Any(a => a.Name.LocalName == "DPS"));
+        toma.Element(ns + "xNome")!.Value = textoLongo;
+        toma.Descendants(ns + "xLgr").Single().Value = textoLongo;
+
+        var nfse = DeserializeXml(xml.ToString());
+        var renderer = new DanfeHtmlRenderer(new DanfeOptions());
+        var (html, _) = renderer.Render(nfse, DanfeEnvironment.Production, false, false);
+
+        var height = await MedirAlturaAsync(html);
+        Assert.True(
+            height <= alturaMaximaComEncolhimento,
+            $"Conteúdo ({height}px) com o bloco ISSQN impresso (tribISSQN={tribIssqn}) excede até o piso de " +
+            $"encolhimento automático ({alturaMaximaComEncolhimento:F1}px) — o documento cairia em 2 páginas.");
     }
 
     // Reprodução direta do cenário residual de #2358429 (bug 4): NFS-e Substituída com todos os
@@ -135,6 +158,36 @@ public class GoldenHtmlTests
 
         Assert.NotEmpty(pdf);
         Assert.Equal((byte)'%', pdf[0]);
+    }
+
+    // Mede a altura renderizada (document.body.scrollHeight) com o viewport ajustado à largura real
+    // de impressão, como o pipeline de geração do PDF faz.
+    private static async System.Threading.Tasks.Task<double> MedirAlturaAsync(string html)
+    {
+        await using var pdfGenerator = new DanfePdfGenerator();
+        var browser = await pdfGenerator.GetBrowserAsync();
+        var page = await browser.NewPageAsync();
+        try
+        {
+            await page.SetViewportAsync(new PuppeteerSharp.ViewPortOptions
+            {
+                Width = (int)Math.Round(DanfePdfGenerator.PageContentWidthPx),
+                Height = (int)Math.Round(DanfePdfGenerator.PageContentHeightPx)
+            });
+            await page.SetContentAsync(html);
+            return await page.EvaluateExpressionAsync<double>("document.body.scrollHeight");
+        }
+        finally
+        {
+            await page.CloseAsync();
+        }
+    }
+
+    private static NFSeSchema DeserializeXml(string xml)
+    {
+        var serializer = new XmlSerializer(typeof(NFSeSchema));
+        using var sr = new StringReader(xml);
+        return (NFSeSchema)serializer.Deserialize(sr)!;
     }
 
     private static NFSeSchema DeserializeFixture(string fixture)

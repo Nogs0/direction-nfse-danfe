@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -10,7 +11,7 @@ using Xunit;
 
 namespace Danfe.Tests;
 
-// #2366209 — campos fiscais do DANFS-e conforme a NT 008 v1.02 (itens 4.1 a 4.11).
+// #2366209 — campos fiscais do DANFS-e conforme a NT 008 v1.02 (itens 4.1 a 4.14).
 // Base: fixture sintética com os valores da nota nº 59; cada teste varia só o que exercita.
 public class Nt008CamposFiscaisTests
 {
@@ -314,7 +315,7 @@ public class Nt008CamposFiscaisTests
     {
         var texto = RenderTexto(x => x.Root!.Element(N + "infNFSe")!.Element(N + "cLocIncid")!.Value = " 4205407 ");
 
-        Assert.Contains("Município de Incidência do ISSQN Florianópolis - SC", texto);
+        Assert.Contains("Município / Sigla UF / País de Incidência do ISSQN Florianópolis / SC / US", texto);
     }
 
     [Fact]
@@ -559,7 +560,479 @@ public class Nt008CamposFiscaisTests
         Assert.Contains("Data e Hora da Emissão da DPS 30/09/2026 23:49:02", texto);
     }
 
+    // ---- 4.9.5 a 4.14 ----
+
+    [Theory]
+    [InlineData("1", "Não Optante")]
+    [InlineData("2", "Optante - Microempreendedor Individua...")]
+    [InlineData("3", "Optante - Microempresa ou Empresa de ...")]
+    public void SimplesNacional_OpSimpNac_ExibeTextoDoAnexoICortadoEm37(string opSimpNac, string esperado)
+    {
+        var texto = RenderTexto(x => RegTribPrestador(x).Element(N + "opSimpNac")!.Value = opSimpNac);
+
+        Assert.Contains($"Simples Nacional na Data de Competência {esperado} Regime de Apuração", texto);
+    }
+
+    [Theory]
+    [InlineData("1", "Regime de apuração dos tributos federais e municipal pelo SN")]
+    [InlineData("2", "Regime de apuração dos tributos federais pelo SN e o ISSQN pela NFS-e conform...")]
+    [InlineData("3", "Regime de apuração dos tributos federais e municipal pela NFS-e conforme resp...")]
+    public void RegimeApuracaoSN_RegApTribSN_ExibeTextoDoAnexoICortadoEm77(string cod, string esperado)
+    {
+        var texto = RenderTexto(x => RegTribPrestador(x).Element(N + "regApTribSN")!.Value = cod);
+
+        Assert.Contains($"Regime de Apuração Tributária pelo SN {esperado} TOMADOR", texto);
+    }
+
+    [Fact]
+    public void RegimeApuracaoSN_Ausente_ExibeTraco()
+    {
+        var texto = RenderTexto(x => RegTribPrestador(x).Element(N + "regApTribSN")!.Remove());
+
+        Assert.Contains("Regime de Apuração Tributária pelo SN - TOMADOR", texto);
+    }
+
+    // ---- 4.11.3 e 4.12: participantes, cabeçalho e local da prestação ----
+
+    [Fact]
+    public void Cabecalho_Municipio_ExibeNomeBarraUf()
+    {
+        var texto = RenderTexto();
+
+        Assert.Contains("Município: Florianópolis / SC", texto);
+    }
+
+    [Fact]
+    public void Prestador_SemDadosNaDps_UsaEmitenteComFormatoDaNt()
+    {
+        var texto = RenderTexto();
+
+        Assert.Contains("Nome / Nome Empresarial PRESTADORA DE SERVICOS DE TESTE LTDA", texto);
+        Assert.Contains("*Endereço RUA DOS TESTES, 100, CENTRO Município / Sigla UF Florianópolis / SC Código IBGE / CEP 4205407 / 01.000-000", texto);
+    }
+
+    [Fact]
+    public void Prestador_ComNomeEEnderecoNaDps_UsaPrestadorDaDps()
+    {
+        var texto = RenderTexto(x =>
+        {
+            x.Descendants(N + "tpEmit").Single().Value = "2";
+            var prest = x.Descendants(N + "infDPS").Single().Element(N + "prest")!;
+            prest.Element(N + "IM")!.AddAfterSelf(
+                new XElement(N + "xNome", "PRESTADOR DECLARADO NA DPS LTDA"),
+                EnderecoNacional("4106902", "80010000", "RUA XV DE NOVEMBRO", "100", "CENTRO"));
+        });
+
+        Assert.Contains("Nome / Nome Empresarial PRESTADOR DECLARADO NA DPS LTDA", texto);
+        Assert.DoesNotContain("PRESTADORA DE SERVICOS DE TESTE LTDA", texto);
+        Assert.Contains("*Endereço RUA XV DE NOVEMBRO, 100, CENTRO Município / Sigla UF Curitiba / PR Código IBGE / CEP 4106902 / 80.010-000", texto);
+        Assert.Contains("Município: Florianópolis / SC", texto);
+    }
+
+    [Fact]
+    public void Prestador_EnderecoNoExteriorNaDps_ExibeCidadeECodigoPostal()
+    {
+        var texto = RenderTexto(x =>
+        {
+            var prest = x.Descendants(N + "infDPS").Single().Element(N + "prest")!;
+            prest.Element(N + "IM")!.AddAfterSelf(
+                new XElement(N + "end",
+                    new XElement(N + "endExt",
+                        new XElement(N + "cPais", "US"),
+                        new XElement(N + "cEndPost", "10001"),
+                        new XElement(N + "xCidade", "New York"),
+                        new XElement(N + "xEstProvReg", "NY")),
+                    new XElement(N + "xLgr", "5TH AVENUE")));
+        });
+
+        Assert.Contains("*Endereço 5TH AVENUE Município / Sigla UF New York / NY Código IBGE / CEP - / 10001", texto);
+    }
+
+    [Fact]
+    public void Prestador_CMunForaDaTabela_ExibeTracoSemInterromper()
+    {
+        var (texto, warnings) = RenderComWarnings(x =>
+            x.Descendants(N + "emit").Single().Element(N + "enderNac")!.Element(N + "cMun")!.Value = "9999999");
+
+        Assert.Contains("Município / Sigla UF - Código IBGE / CEP 9999999 / 01.000-000", texto);
+        Assert.Contains(warnings, w => w.Code == "MUNICIPIO_NOT_FOUND");
+    }
+
+    [Fact]
+    public void Tomador_FormatoDaNt()
+    {
+        var texto = RenderTexto();
+
+        Assert.Contains("*Endereço AV DAS TOMADORAS, 200, JARDIM TESTE Município / Sigla UF Florianópolis / SC Código IBGE / CEP 4205407 / 02.000-000", texto);
+    }
+
+    [Fact]
+    public void Intermediario_FormatoDaNt()
+    {
+        var texto = RenderTexto();
+
+        Assert.Contains("RUA DO INTERMEDIARIO, 300, VILA TESTE Município / Sigla UF Florianópolis / SC Código IBGE / CEP 4205407 / 03.000-000", texto);
+    }
+
+    [Fact]
+    public void Destinatario_Informado_FormatoDaNt()
+    {
+        var texto = RenderTexto(x =>
+            DpsIbsCbs(x).Element(N + "indDest")!.AddAfterSelf(
+                new XElement(N + "dest",
+                    new XElement(N + "CNPJ", "11222333000181"),
+                    new XElement(N + "xNome", "DESTINATARIO DE TESTE LTDA"),
+                    EnderecoNacional("3550308", "01310100", "AVENIDA PAULISTA", "1000", "BELA VISTA", "CONJ 10"))));
+
+        Assert.Contains("AVENIDA PAULISTA, 1000, CONJ 10, BELA VISTA Município / Sigla UF São Paulo / SP Código IBGE / CEP 3550308 / 01.310-100", texto);
+    }
+
+    [Fact]
+    public void Participante_NomeEEnderecoAcimaDe77_CortaComReticencias()
+    {
+        const string nome = "EMPRESA TOMADORA DE TESTE COM NOME EMPRESARIAL MUITO LONGO PARA CONFERIR O CORTE DE SETENTA E SETE";
+        const string logradouro = "AVENIDA DE TESTE COM NOME DE LOGRADOURO EXTENSO PARA ULTRAPASSAR O LIMITE DO ENDERECO";
+        var endereco = $"{logradouro}, 200, JARDIM TESTE";
+
+        var texto = RenderTexto(x =>
+        {
+            var toma = x.Descendants(N + "infDPS").Single().Element(N + "toma")!;
+            toma.Element(N + "xNome")!.Value = nome;
+            toma.Element(N + "end")!.Element(N + "xLgr")!.Value = logradouro;
+        });
+
+        Assert.Contains($"Nome / Nome Empresarial {nome.Substring(0, 77)}... E-mail", texto);
+        Assert.Contains($"*Endereço {endereco.Substring(0, 77)}... Município / Sigla UF", texto);
+    }
+
+    [Fact]
+    public void Participante_NomeCom77Caracteres_SaiInteiro()
+    {
+        var nome = "TOMADORA " + new string('X', 68);
+        Assert.Equal(77, nome.Length);
+
+        var texto = RenderTexto(x =>
+            x.Descendants(N + "infDPS").Single().Element(N + "toma")!.Element(N + "xNome")!.Value = nome);
+
+        Assert.Contains($"Nome / Nome Empresarial {nome} E-mail", texto);
+    }
+
+    [Fact]
+    public void Participante_EnderecoSoComLogradouro_SemVirgulasSobrando()
+    {
+        var texto = RenderTexto(x =>
+        {
+            var end = x.Descendants(N + "infDPS").Single().Element(N + "toma")!.Element(N + "end")!;
+            end.Element(N + "nro")!.Remove();
+            end.Element(N + "xBairro")!.Remove();
+        });
+
+        Assert.Contains("*Endereço AV DAS TOMADORAS Município / Sigla UF", texto);
+    }
+
+    [Fact]
+    public void LocalPrestacao_ExibeMunicipioBarraUfBarraPais()
+    {
+        Assert.Contains("Local da Prestação / Sigla UF / País Florianópolis / SC / BR", RenderTexto());
+
+        var semPais = RenderTexto(x => x.Descendants(N + "cPaisPrestacao").Remove());
+        Assert.Contains("Florianópolis / SC / -", semPais);
+    }
+
+    [Fact]
+    public void LocalPrestacao_PaisNoExteriorSemMunicipio_MantemTresPartes()
+    {
+        var texto = RenderTexto(x =>
+        {
+            x.Descendants(N + "cLocPrestacao").Remove();
+            x.Descendants(N + "cPaisPrestacao").Single().Value = "US";
+        });
+
+        Assert.Contains("Local da Prestação / Sigla UF / País - / - / US", texto);
+    }
+
+    // ---- Tributação Municipal (ISSQN): 4.9.6, 4.13.1 a 4.13.4 ----
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("2", true)]
+    [InlineData("3", true)]
+    [InlineData("4", false)]
+    public void BlocoIssqn_TribIssqn_SoNaoIncidenciaTrocaPelaFrase(string trib, bool bloco)
+    {
+        var texto = RenderTexto(x => Dps(x, "tribMun", "tribISSQN").Value = trib);
+
+        if (bloco)
+        {
+            Assert.Contains("TRIBUTAÇÃO MUNICIPAL (ISSQN) Tipo de Tributação do ISSQN", texto);
+            Assert.DoesNotContain("OPERAÇÃO NÃO SUJEITA AO ISSQN", texto);
+        }
+        else
+        {
+            Assert.DoesNotContain("Tipo de Tributação do ISSQN", texto);
+            Assert.Contains("TRIBUTAÇÃO MUNICIPAL (ISSQN) - OPERAÇÃO NÃO SUJEITA AO ISSQN", texto);
+        }
+    }
+
+    [Fact]
+    public void BlocoIssqn_TribIssqnAusente_ImprimeOBloco()
+    {
+        var texto = RenderTexto(x => Dps(x, "tribMun", "tribISSQN").Remove());
+
+        Assert.Contains("TRIBUTAÇÃO MUNICIPAL (ISSQN) Tipo de Tributação do ISSQN -", texto);
+        Assert.DoesNotContain("OPERAÇÃO NÃO SUJEITA AO ISSQN", texto);
+    }
+
+    [Fact]
+    public void BcIssqn_ReproduzVBCDaNfse()
+    {
+        var texto = RenderTexto(x =>
+        {
+            x.Descendants(N + "vDescIncond").Single().Value = "1000.00";
+            ValoresNfse(x).Element(N + "vBC")!.Value = "9000.00";
+        });
+
+        Assert.Contains("BC ISSQN R$ 9.000,00", texto);
+    }
+
+    [Fact]
+    public void BcIssqn_VBCAusente_ExibeTraco()
+    {
+        var texto = RenderTexto(x => ValoresNfse(x).Element(N + "vBC")!.Remove());
+
+        Assert.Contains("BC ISSQN -", texto);
+    }
+
+    [Theory]
+    [InlineData("vCalcDR", "R$ 500,00")]
+    [InlineData("vDR+vCalcReeRepRes", "R$ 500,00")]
+    [InlineData("vDR+vCalcDR", "R$ 300,00")]
+    [InlineData("pDR+vCalcDR", "R$ 500,00")]
+    [InlineData("fixture", "R$ 0,00")]
+    [InlineData("semVCalcReeRepRes", "-")]
+    public void TotalDeducoes_ComposicaoDaNt(string caso, string esperado)
+    {
+        var texto = RenderTexto(x =>
+        {
+            switch (caso)
+            {
+                case "vCalcDR":
+                    ValoresNfse(x).Add(new XElement(N + "vCalcDR", "500.00"));
+                    break;
+                case "vDR+vCalcReeRepRes":
+                    DedRed(x, new XElement(N + "vDR", "300.00"));
+                    InfNfseIbsCbs(x).Element(N + "valores")!.Element(N + "vCalcReeRepRes")!.Value = "200.00";
+                    break;
+                case "vDR+vCalcDR":
+                    DedRed(x, new XElement(N + "vDR", "300.00"));
+                    ValoresNfse(x).Add(new XElement(N + "vCalcDR", "999.00"));
+                    break;
+                case "pDR+vCalcDR":
+                    DedRed(x, new XElement(N + "pDR", "10.00"));
+                    ValoresNfse(x).Add(new XElement(N + "vCalcDR", "500.00"));
+                    break;
+                case "semVCalcReeRepRes":
+                    InfNfseIbsCbs(x).Element(N + "valores")!.Element(N + "vCalcReeRepRes")!.Remove();
+                    break;
+            }
+        });
+
+        Assert.Contains($"Total Deduções/Reduções {esperado} Cálculo do BM", texto);
+    }
+
+    [Theory]
+    [InlineData("US", "Município / Sigla UF / País de Incidência do ISSQN Florianópolis / SC / US")]
+    [InlineData(null, "Município / Sigla UF / País de Incidência do ISSQN Florianópolis / SC / -")]
+    public void IncidenciaIssqn_CampoUnico(string? pais, string esperado)
+    {
+        var texto = RenderTexto(x =>
+        {
+            if (pais == null) Dps(x, "tribMun", "cPaisResult").Remove();
+        });
+
+        Assert.Contains(esperado, texto);
+        Assert.DoesNotContain("País Resultado da Prestação do Serviço", texto);
+        Assert.DoesNotContain("Município de Incidência do ISSQN", texto);
+    }
+
+    [Fact]
+    public void IncidenciaIssqn_SemXLocIncid_UsaNomeDaTabela()
+    {
+        var texto = RenderTexto(x => InfNfse(x).Element(N + "xLocIncid")!.Remove());
+
+        Assert.Contains("Município / Sigla UF / País de Incidência do ISSQN Florianópolis / SC / US", texto);
+    }
+
+    [Fact]
+    public void IncidenciaIssqn_SemMunicipioNemXLocIncid_MantemTresPartes()
+    {
+        var texto = RenderTexto(x =>
+        {
+            InfNfse(x).Element(N + "cLocIncid")!.Remove();
+            InfNfse(x).Element(N + "xLocIncid")!.Remove();
+        });
+
+        Assert.Contains("Município / Sigla UF / País de Incidência do ISSQN - / - / US", texto);
+    }
+
+    [Fact]
+    public void IncidenciaIssqn_XLocIncidPrevaleceSobreONomeDaTabela()
+    {
+        var texto = RenderTexto(x => InfNfse(x).Element(N + "xLocIncid")!.Value = "Outro Nome");
+
+        Assert.Contains("Município / Sigla UF / País de Incidência do ISSQN Outro Nome / SC / US", texto);
+    }
+
+    [Theory]
+    [InlineData("0", "Imunidade (tipo não informado na nota...")]
+    [InlineData("1", "Patrimônio, renda ou serviços, uns do...")]
+    [InlineData("2", "Entidades religiosas e templos de qua...")]
+    [InlineData("3", "Patrimônio, renda ou serviços dos par...")]
+    [InlineData("4", "Livros, jornais, periódicos e o papel...")]
+    [InlineData("5", "Fonogramas e videofonogramas musicais...")]
+    public void TipoImunidade_TpImunidade_ExibeTextoDoLeiauteCortadoEm37(string tp, string esperado)
+    {
+        var texto = RenderTexto(x =>
+        {
+            Dps(x, "tribMun", "tribISSQN").Value = "2";
+            Dps(x, "tribMun").Add(new XElement(N + "tpImunidade", tp));
+        });
+
+        Assert.Contains($"Tipo de Imunidade {esperado} Suspensão", texto);
+    }
+
+    [Fact]
+    public void TipoImunidade_Ausente_ExibeTraco()
+    {
+        var texto = RenderTexto(x => Dps(x, "tribMun", "tribISSQN").Value = "2");
+
+        Assert.Contains("Tipo de Imunidade - Suspensão", texto);
+    }
+
+    [Theory]
+    [InlineData("1", "Exigibilidade Suspensa por Decisão Ju...")]
+    [InlineData("2", "Exigibilidade Suspensa por Processo A...")]
+    [InlineData("0", "-")]
+    public void Suspensao_TpSusp_ExibeTextoDaNtCortadoEm37(string tp, string esperado)
+    {
+        var texto = RenderTexto(x => Dps(x, "tribMun").Add(
+            new XElement(N + "exigSusp", new XElement(N + "tpSusp", tp), new XElement(N + "nProcesso", "123456789"))));
+
+        Assert.Contains($"Suspensão da Exigibilidade do ISSQN {esperado} Número Processo", texto);
+    }
+
+    // ---- 4.14 Campos sem informação no XML ----
+
+    [Fact]
+    public void ValorTotal_DescontosAusentes_ExibeTraco()
+    {
+        var texto = RenderTexto(x => x.Descendants(N + "vDescCondIncond").Single().Remove());
+
+        Assert.Contains("Desconto Incondicionado - Desconto Condicionado - Total das Retenções", texto);
+        Assert.Contains("Exclusões e Reduções da Base de Cálculo R$ 665,00", texto);
+    }
+
+    [Fact]
+    public void ValorTotal_DescontosInformados_ExibeValor()
+    {
+        var texto = RenderTexto(x =>
+        {
+            x.Descendants(N + "vDescIncond").Single().Value = "100.00";
+            x.Descendants(N + "vDescCond").Single().Value = "50.00";
+        });
+
+        Assert.Contains("Desconto Incondicionado R$ 100,00 Desconto Condicionado R$ 50,00 Total das Retenções", texto);
+    }
+
+    [Fact]
+    public void ValorTotal_DescontoZeroInformado_ExibeZero()
+    {
+        var texto = RenderTexto();
+
+        Assert.Contains("Desconto Incondicionado R$ 0,00 Desconto Condicionado R$ 0,00 Total das Retenções", texto);
+    }
+
+    [Theory]
+    [InlineData("soUF", "10,00% / - / -")]
+    [InlineData("nenhum", "- / - / -")]
+    [InlineData("fixture", "0,00% / 0,00% / 0,00%")]
+    public void RedAliquota_ComponenteAusente_ExibeTracoSemPercentual(string caso, string esperado)
+    {
+        var texto = RenderTexto(x =>
+        {
+            if (caso == "fixture") return;
+            x.Descendants(N + "pRedAliqMun").Remove();
+            x.Descendants(N + "pRedAliqCBS").Remove();
+            if (caso == "nenhum") x.Descendants(N + "pRedAliqUF").Remove();
+            else x.Descendants(N + "pRedAliqUF").Single().Value = "10.00";
+        });
+
+        Assert.Contains($"Red. Alíquota IBS UF / IBS Mun / CBS {esperado} Alíquota IBS UF", texto);
+    }
+
+    [Fact]
+    public void InfComplementares_ObraComCObra_ImprimeTrecho()
+    {
+        Assert.Contains("Cod. Obra: 000123", RenderTexto());
+    }
+
+    [Fact]
+    public void InfComplementares_ObraSemCObra_NaoImprimeTrecho()
+    {
+        var texto = RenderTexto(x => x.Descendants(N + "cObra").Remove());
+
+        Assert.DoesNotContain("Cod. Obra:", texto);
+    }
+
+    [Fact]
+    public void InfComplementares_ImovelSemInscricao_NaoImprimeTrecho()
+    {
+        var texto = RenderTexto(x =>
+            DpsIbsCbs(x).Element(N + "indDest")!.AddAfterSelf(
+                new XElement(N + "imovel",
+                    new XElement(N + "end",
+                        new XElement(N + "CEP", "88010000"),
+                        new XElement(N + "xLgr", "RUA DO IMOVEL"),
+                        new XElement(N + "nro", "10"),
+                        new XElement(N + "xBairro", "CENTRO")))));
+
+        Assert.DoesNotContain("Insc. Imob.:", texto);
+    }
+
+    [Fact]
+    public void InfComplementares_ImovelComInscricao_ImprimeTrecho()
+    {
+        var texto = RenderTexto(x =>
+            DpsIbsCbs(x).Element(N + "indDest")!.AddAfterSelf(
+                new XElement(N + "imovel", new XElement(N + "inscImobFisc", "123456789"))));
+
+        Assert.Contains("Insc. Imob.: 123456789", texto);
+    }
+
+    [Fact]
+    public void Caso2366209_CamposSemDadoNoXml_ExibemTraco()
+    {
+        var texto = RenderTexto(x =>
+        {
+            x.Descendants(N + "vDescCondIncond").Single().Remove();
+            x.Descendants(N + "pRedAliqUF").Remove();
+            x.Descendants(N + "pRedAliqMun").Remove();
+            x.Descendants(N + "pRedAliqCBS").Remove();
+            x.Descendants(N + "obra").Remove();
+        });
+
+        Assert.Contains("Desconto Incondicionado - Desconto Condicionado - Total das Retenções", texto);
+        Assert.Contains("Red. Alíquota IBS UF / IBS Mun / CBS - / - / - Alíquota IBS UF", texto);
+        Assert.DoesNotContain("Insc. Imob.:", texto);
+        Assert.DoesNotContain("Cod. Obra:", texto);
+    }
+
     // ---- infraestrutura ----
+
+    // vDedRed da DPS (entre vDescCondIncond e trib) com a parcela informada.
+    private static void DedRed(XDocument x, XElement parcela) =>
+        x.Descendants(N + "infDPS").Single().Element(N + "valores")!.Element(N + "vDescCondIncond")!
+            .AddAfterSelf(new XElement(N + "vDedRed", parcela));
 
     private static string CaminhoFixture(string fixture) => Path.Combine(AppContext.BaseDirectory, "Fixtures", fixture + ".xml");
 
@@ -577,6 +1050,33 @@ public class Nt008CamposFiscaisTests
 
         var (html, _) = new DanfeHtmlRenderer(new DanfeOptions()).Render(Desserializar(doc), environment, isCancelled, isReplaced);
 
+        return HtmlParaTexto(html);
+    }
+
+    private static (string Texto, IReadOnlyList<DanfeWarning> Warnings) RenderComWarnings(Action<XDocument> mutar)
+    {
+        var doc = XDocument.Load(CaminhoFixture(Fixture));
+        mutar(doc);
+
+        var (html, warnings) = new DanfeHtmlRenderer(new DanfeOptions()).Render(Desserializar(doc), DanfeEnvironment.Production);
+
+        return (HtmlParaTexto(html), warnings);
+    }
+
+    // Grupo "end" (EndSimples) com endereço nacional, na ordem do leiaute.
+    private static XElement EnderecoNacional(string cMun, string cep, string xLgr, string nro, string xBairro, string? xCpl = null)
+    {
+        var end = new XElement(N + "end",
+            new XElement(N + "endNac", new XElement(N + "cMun", cMun), new XElement(N + "CEP", cep)),
+            new XElement(N + "xLgr", xLgr),
+            new XElement(N + "nro", nro));
+        if (xCpl != null) end.Add(new XElement(N + "xCpl", xCpl));
+        end.Add(new XElement(N + "xBairro", xBairro));
+        return end;
+    }
+
+    private static string HtmlParaTexto(string html)
+    {
         var semTags = Regex.Replace(html, "<[^>]+>", " ");
         var texto = WebUtility.HtmlDecode(semTags).Replace(' ', ' ');
         return Regex.Replace(texto, @"\s+", " ");
@@ -589,6 +1089,9 @@ public class Nt008CamposFiscaisTests
             atual = atual.Element(N + nome)!;
         return atual;
     }
+
+    private static XElement RegTribPrestador(XDocument x) =>
+        x.Descendants(N + "infDPS").Single().Element(N + "prest")!.Element(N + "regTrib")!;
 
     private static XElement DpsIbsCbs(XDocument x) => x.Descendants(N + "infDPS").Single().Element(N + "IBSCBS")!;
 
