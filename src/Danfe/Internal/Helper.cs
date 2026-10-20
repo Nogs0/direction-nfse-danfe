@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 using QRCoder;
@@ -15,36 +16,15 @@ namespace Direction.NFSe.Danfe
         public static string HtmlEncode(string s) =>
             WebUtility.HtmlEncode(s ?? string.Empty);
 
-        public static string BuildEndereco(EndSimples? end)
-        {
-            if (end == null) return "-";
-            var sb = new StringBuilder();
+        // NT-008 v1.02: logradouro, número, complemento e bairro informados, separados por ", ".
+        public static string BuildEndereco(EndSimples? end) =>
+            end == null ? "-" : JuntarEndereco(end.xLgr, end.nro, end.xCpl, end.xBairro);
 
-            sb.Append(end.xLgr);
-            if (!string.IsNullOrWhiteSpace(end.nro))
-                sb.Append(", ").Append(end.nro);
-            if (!string.IsNullOrWhiteSpace(end.xCpl))
-                sb.Append(", ").Append(end.xCpl);
-            if (!string.IsNullOrWhiteSpace(end.xBairro))
-                sb.Append(" - ").Append(end.xBairro);
+        public static string BuildEndereco(EnderNac? end) =>
+            end == null ? "-" : JuntarEndereco(end.xLgr, end.nro, end.xCpl, end.xBairro);
 
-            return sb.ToString();
-        }
-        public static string BuildEndereco(EnderNac? end)
-        {
-            if (end == null) return "-";
-            var sb = new StringBuilder();
-
-            sb.Append(end.xLgr);
-            if (!string.IsNullOrWhiteSpace(end.nro))
-                sb.Append(", ").Append(end.nro);
-            if (!string.IsNullOrWhiteSpace(end.xCpl))
-                sb.Append(", ").Append(end.xCpl);
-            if (!string.IsNullOrWhiteSpace(end.xBairro))
-                sb.Append(" - ").Append(end.xBairro);
-
-            return sb.ToString();
-        }
+        private static string JuntarEndereco(params string?[] partes) =>
+            string.Join(", ", partes.Where(p => !string.IsNullOrWhiteSpace(p)).Select(p => p!.Trim()));
 
         public static string BuildDescricaoServicoHtml(string? desc)
         {
@@ -121,12 +101,13 @@ namespace Direction.NFSe.Danfe
             return cpf!;
         }
 
+        // NT-008 v1.02: CEP com 8 dígitos sai como 00.000-000; vazio, "-"; outro formato, como veio.
         public static string FormatCep(string? cep)
         {
-            if (string.IsNullOrEmpty(cep)) return "-";
+            if (string.IsNullOrWhiteSpace(cep)) return "-";
             var digits = OnlyDigits(cep!);
             if (digits.Length == 8)
-                return Convert.ToUInt64(digits).ToString(@"00000\-000");
+                return Convert.ToUInt64(digits).ToString(@"00\.000\-000");
             return cep!;
         }
 

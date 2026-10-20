@@ -13,6 +13,9 @@ public sealed class DanfeHtmlRenderer
     private const string TransparentPixelBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 
+    // NT-008 v1.02: nome e endereço dos participantes acima do limite do campo saem como os 77 primeiros caracteres + "...".
+    private const int LimiteNomeEndereco = 77;
+
     private readonly string _templatePath;
     private readonly DanfeOptions _options;
     private readonly string _templateContent;
@@ -98,8 +101,9 @@ public sealed class DanfeHtmlRenderer
         decimal vServico = infDps.valores?.vServPrest?.vServ ?? 0m;
         if (infDps.valores?.vServPrest?.vServ == null) warnings.FieldMissing("vServPrest.vServ", "infNFSe.DPS.InfDPS.valores.vServPrest.vServ", "0,00");
 
-        decimal vDescCond = infDps.valores?.vDescCondIncond?.vDescCond ?? 0M;
-        decimal vDescIncond = infDps.valores?.vDescCondIncond?.vDescIncond ?? 0M;
+        // NT-008 v1.02 (4.14): descontos ausentes no XML saem como "-" (zero informado sai "R$ 0,00"); sem aviso.
+        decimal? vDescCond = infDps.valores?.vDescCondIncond?.vDescCond;
+        decimal? vDescIncond = infDps.valores?.vDescCondIncond?.vDescIncond;
 
         string chaveAcesso = inf.Id!.Substring(3);
         if (string.IsNullOrWhiteSpace(chaveAcesso)) warnings.FieldMissing("chaveAcesso", "infNFSe.Id", string.Empty);
@@ -141,7 +145,36 @@ public sealed class DanfeHtmlRenderer
             warnings.FieldMissing("cLocIncid", "infNFSe.cLocIncid", "-");
 
         // Município emitente (cabeçalho)
-        var municipioEmitente = DanfeFallback.OrDash($"{inf.xLocEmi} - {inf.emit?.enderNac?.UF}", warnings, "Município Emitente", "infNFSe.xLocEmi | infNFSe.emit.enderNac.UF");
+        // NT-008 v1.02: "Município / Sigla UF" (nome do município emissor / UF do emitente).
+        if (string.IsNullOrWhiteSpace(inf.xLocEmi) && string.IsNullOrWhiteSpace(inf.emit?.enderNac?.UF))
+            warnings.FieldMissing("Município Emitente", "infNFSe.xLocEmi | infNFSe.emit.enderNac.UF", "-");
+        var municipioEmitente = FormatarMunicipioUf(inf.xLocEmi, inf.emit?.enderNac?.UF);
+
+        // Prestador: nome e endereço declarados na DPS (prest) valem quando informados; senão, o emitente da NFS-e.
+        // Endereço, município e Código IBGE / CEP vêm sempre do mesmo grupo.
+        var prestadorDps = infDps.prest;
+        var prestadorNome = DanfeFallback.OrDash(
+            !string.IsNullOrWhiteSpace(prestadorDps?.xNome) ? prestadorDps!.xNome!.Trim() : inf.emit?.xNome,
+            warnings, "xNome Prestador", "infNFSe.emit.xNome");
+        string prestadorEndereco, prestadorMunicipio, prestadorIbgeCep;
+        if (prestadorDps?.end?.endNac != null || prestadorDps?.end?.endExt != null)
+        {
+            const string pathPrest = "infNFSe.DPS.InfDPS.prest.end";
+            prestadorEndereco = DanfeFallback.OrDash(Helper.BuildEndereco(prestadorDps.end), warnings, "Endereço Prestador", pathPrest);
+            prestadorMunicipio = ResolveMunicipioComUf(prestadorDps.end, warnings, pathPrest);
+            prestadorIbgeCep = ResolveCodigoIbgeCep(prestadorDps.end);
+        }
+        else
+        {
+            var enderEmit = inf.emit?.enderNac;
+            prestadorEndereco = DanfeFallback.OrDash(Helper.BuildEndereco(enderEmit), warnings, "Endereço Prestador", "infNFSe.emit.enderNac");
+            if (string.IsNullOrWhiteSpace(enderEmit?.cMun))
+                warnings.FieldMissing("cMun Prestador", "infNFSe.emit.enderNac.cMun", "-");
+            var municipioEmit = ObterMunicipio(enderEmit?.cMun, "infNFSe.emit.enderNac.cMun", warnings);
+            prestadorMunicipio = FormatarMunicipioUf(municipioEmit?.Nome, municipioEmit?.Uf);
+            // O cMun do emitente é texto no leiaute: o código sai como veio, mesmo fora da tabela.
+            prestadorIbgeCep = FormatarCodigoIbgeCep(enderEmit?.cMun, enderEmit?.CEP);
+        }
 
         // Logo oficial da NFS-e (cabeçalho)
         var logoNfse = _options.LogoNFSePath != null ? Helper.GetLogo(_options.LogoNFSePath) : Helper.GetLogo(Path.Combine(AppContext.BaseDirectory, "Assets", "Logos", "nfse.png"));
@@ -233,11 +266,13 @@ public sealed class DanfeHtmlRenderer
             : BuildParticipanteNaoIdentificadoBloco("INTERMEDIÁRIO DA OPERAÇÃO", "INTERMEDIÁRIO DA OPERAÇÃO NÃO IDENTIFICADO NA NFS-e");
 
         // Bloco Tributação Municipal (ISSQN) (NT-008 Nota 4)
-        int? tribISSQN = infDps.valores?.trib?.tribMun?.tribISSQN;
-        var operacaoTributavelPorIssqn = tribISSQN == 1;
+        // NT-008 v1.02 (4.13.1): só tribISSQN = 4 (Não Incidência) troca o bloco pela frase de operação não sujeita ao
+        // ISSQN. tribISSQN é int não anulável: a tag ausente chega como 0 e também imprime o bloco.
+        int tribISSQN = infDps.valores?.trib?.tribMun?.tribISSQN ?? 0;
+        var operacaoNaoSujeitaAoIssqn = tribISSQN == 4;
 
-        string blocoTribMunicipal = operacaoTributavelPorIssqn
-            ? BuildTribMunicipalBloco(infDps, valores, municpioISSQN, tpRetIssqn, vAliqAplic, vIssqn, vServico, ptBR, warnings)
+        string blocoTribMunicipal = !operacaoNaoSujeitaAoIssqn
+            ? BuildTribMunicipalBloco(infDps, inf, valores, municpioISSQN, tpRetIssqn, vAliqAplic, vIssqn, ptBR, warnings)
             : BuildBlocoNaoAplicavel("TRIBUTAÇÃO MUNICIPAL (ISSQN)", "TRIBUTAÇÃO MUNICIPAL (ISSQN) - OPERAÇÃO NÃO SUJEITA AO ISSQN");
 
         // Bloco Tributação IBS/CBS (suprimido por completo quando o grupo não existir, regra 4.7.5)
@@ -246,7 +281,7 @@ public sealed class DanfeHtmlRenderer
         var possuiIbsCbs = ibscbsDeclarado != null || ibscbsApurado != null;
 
         // NT-008 v1.02: Exclusões e Reduções = vDescIncond + vCalcReeRepRes + vISSQN + vPis + vCofins (ausente = 0).
-        decimal exclusoesReducoes = vDescIncond + (ibscbsApurado?.valores?.vCalcReeRepRes ?? 0M) + (vIssqn ?? 0M) + (vPIS ?? 0M) + (vCOFINS ?? 0M);
+        decimal exclusoesReducoes = (vDescIncond ?? 0M) + (ibscbsApurado?.valores?.vCalcReeRepRes ?? 0M) + (vIssqn ?? 0M) + (vPIS ?? 0M) + (vCOFINS ?? 0M);
 
         string blocoIbsCbs = possuiIbsCbs
             ? BuildIbsCbsBloco(infDps, inf, exclusoesReducoes, ptBR, warnings)
@@ -306,10 +341,11 @@ public sealed class DanfeHtmlRenderer
             ["{{PREST_CNPJ}}"] = !string.IsNullOrEmpty(infDps.prest?.CPF) ? DanfeFallback.OrDash(Helper.FormatCpf(infDps.prest?.CPF), warnings, fieldName: "CNPJ Prestador", path: "infNFSe.DPS.InfDPS.prest.CPF")
                 : DanfeFallback.OrDash(Helper.FormatCnpj(infDps.prest?.CNPJ), warnings, fieldName: "CNPJ Prestador", path: "infNFSe.DPS.InfDPS.prest.CNPJ"),
             ["{{PREST_IM}}"] = DanfeFallback.OrDash(infDps.prest?.IM, warnings, "IM Prestador", "infNFSe.DPS.InfDPS.prest.IM"),
-            ["{{PREST_RAZAO}}"] = DanfeFallback.OrDash(inf.emit?.xNome, warnings, "xNome Prestador", "infNFSe.emit.xNome"),
-            ["{{PREST_ENDERECO}}"] = DanfeFallback.OrDash(Helper.BuildEndereco(inf.emit?.enderNac), warnings, "Endereço Prestador", "infNFSe.emit.enderNac"),
-            ["{{PREST_MUNICIPIO}}"] = municipioEmitente,
-            ["{{PREST_CEP}}"] = DanfeFallback.OrDash(Helper.FormatCep(inf.emit?.enderNac?.CEP), warnings, "CEP Prestador", "infNFSe.emit.enderNac.CEP"),
+            // NT-008 v1.02: nome e endereço cortados em 77 caracteres + "..."; município e IBGE/CEP no formato da NT.
+            ["{{PREST_RAZAO}}"] = Helper.CortarComReticencias(prestadorNome, LimiteNomeEndereco),
+            ["{{PREST_ENDERECO}}"] = Helper.CortarComReticencias(prestadorEndereco, LimiteNomeEndereco),
+            ["{{PREST_MUNICIPIO}}"] = prestadorMunicipio,
+            ["{{PREST_CEP}}"] = prestadorIbgeCep,
             ["{{PREST_FONE}}"] = DanfeFallback.OrDash(Helper.FormatTelefone(infDps.prest?.fone), warnings, "Fone Prestador", "infNFSe.DPS.InfDPS.prest.fone"),
             ["{{PREST_EMAIL}}"] = DanfeFallback.OrDash(infDps.prest?.email, warnings, "Email Prestador", "infNFSe.DPS.InfDPS.prest.email"),
             ["{{PREST_SIMPLES}}"] = GetDescricaoPrestadorSimples(infDps.prest?.regTrib?.opSimpNac),
@@ -325,7 +361,8 @@ public sealed class DanfeHtmlRenderer
             ["{{SERV_CTRIB_DESC}}"] = string.IsNullOrWhiteSpace(descricaoTributacao) ? "-" : Helper.CortarComReticencias(descricaoTributacao!, 167),
             ["{{SERV_NBS}}"] = FormatarNbs(infDps.serv?.cServ?.cNBS, warnings),
             ["{{SERV_DESC_HTML}}"] = Helper.BuildDescricaoServicoHtml(infDps.serv?.cServ?.xDescServ),
-            ["{{SERV_LOCAL}}"] = DanfeFallback.OrDash(municipioPrestador?.NomeComUf, warnings, "Município Prestação", "MunicipiosIbge.GetMunicipio(cLocPrestacao).NomeComUf"),
+            // NT-008 v1.02: "Local da Prestação / Sigla UF / País" — o município vem de cLocPrestacao (avisos já emitidos acima).
+            ["{{SERV_LOCAL}}"] = municipioPrestador == null ? "- / -" : FormatarMunicipioUf(municipioPrestador.Nome, municipioPrestador.Uf),
             ["{{SERV_PAIS}}"] = DanfeFallback.OrDash(infDps.serv?.locPrest?.cPaisPrestacao, warnings, "País da Prestação", "infNFSe.DPS.InfDPS.serv.locPrest.cPaisPrestacao"),
 
             // Bloco suprimível de Tributação Municipal (ISSQN)
@@ -345,8 +382,8 @@ public sealed class DanfeHtmlRenderer
             // Valores / Valor Total da NFS-e
             ["{{VALOR_SERVICO}}"] = vServico.ToString("C", ptBR),
             ["{{VALOR_LIQUIDO}}"] = DanfeFallback.OrCurrency(vLiq, ptBR, warnings, "vLiq", "infNFSe.valores.vLiq"),
-            ["{{DESC_COND}}"] = vDescCond != 0 ? vDescCond.ToString("C", ptBR) : "R$",
-            ["{{DESC_INCOND}}"] = vDescIncond != 0 ? vDescIncond.ToString("C", ptBR) : "R$",
+            ["{{DESC_COND}}"] = vDescCond?.ToString("C", ptBR) ?? "-",
+            ["{{DESC_INCOND}}"] = vDescIncond?.ToString("C", ptBR) ?? "-",
             ["{{TOTAL_RETENCOES}}"] = vTotalRet?.ToString("C", ptBR) ?? "-",
             ["{{TOTAL_IBSCBS}}"] = vTotalIbsCbs.HasValue ? vTotalIbsCbs.Value.ToString("C", ptBR) : "-",
             ["{{VALOR_LIQUIDO_IBSCBS}}"] = vTotNF.HasValue ? vTotNF.Value.ToString("C", ptBR) : "-",
@@ -434,10 +471,10 @@ public sealed class DanfeHtmlRenderer
             DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Tomador", "infNFSe.DPS.InfDPS.toma"),
             DanfeFallback.OrDash(toma.IM),
             DanfeFallback.OrDash(Helper.FormatTelefone(toma.fone)),
-            DanfeFallback.OrDash(toma.xNome, warnings, "xNome Tomador", "infNFSe.DPS.InfDPS.toma.xNome"),
-            DanfeFallback.OrDash(Helper.BuildEndereco(toma.end), warnings, "Endereço Tomador", "infNFSe.DPS.InfDPS.toma.end"),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(toma.xNome, warnings, "xNome Tomador", "infNFSe.DPS.InfDPS.toma.xNome"), LimiteNomeEndereco),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(Helper.BuildEndereco(toma.end), warnings, "Endereço Tomador", "infNFSe.DPS.InfDPS.toma.end"), LimiteNomeEndereco),
             ResolveMunicipioComUf(toma.end, warnings, "infNFSe.DPS.InfDPS.toma.end"),
-            ResolveCepOuCEndPost(toma.end),
+            ResolveCodigoIbgeCep(toma.end),
             DanfeFallback.OrDash(toma.email));
     }
 
@@ -452,10 +489,10 @@ public sealed class DanfeHtmlRenderer
             DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest"),
             null,
             DanfeFallback.OrDash(Helper.FormatTelefone(destinatario.fone)),
-            DanfeFallback.OrDash(destinatario.xNome, warnings, "xNome Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.xNome"),
-            DanfeFallback.OrDash(Helper.BuildEndereco(destinatario.end), warnings, "Endereço Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.end"),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(destinatario.xNome, warnings, "xNome Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.xNome"), LimiteNomeEndereco),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(Helper.BuildEndereco(destinatario.end), warnings, "Endereço Destinatário", "infNFSe.DPS.InfDPS.IBSCBS.dest.end"), LimiteNomeEndereco),
             ResolveMunicipioComUf(destinatario.end, warnings, "infNFSe.DPS.InfDPS.IBSCBS.dest.end"),
-            ResolveCepOuCEndPost(destinatario.end),
+            ResolveCodigoIbgeCep(destinatario.end),
             DanfeFallback.OrDash(destinatario.email));
     }
 
@@ -470,10 +507,10 @@ public sealed class DanfeHtmlRenderer
             DanfeFallback.OrDash(cnpjCpfNif, warnings, "CNPJ/CPF/NIF Intermediário", "infNFSe.DPS.InfDPS.interm"),
             DanfeFallback.OrDash(intermediario.IM),
             DanfeFallback.OrDash(Helper.FormatTelefone(intermediario.fone)),
-            DanfeFallback.OrDash(intermediario.xNome, warnings, "xNome Intermediário", "infNFSe.DPS.InfDPS.interm.xNome"),
-            DanfeFallback.OrDash(Helper.BuildEndereco(intermediario.end), warnings, "Endereço Intermediário", "infNFSe.DPS.InfDPS.interm.end"),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(intermediario.xNome, warnings, "xNome Intermediário", "infNFSe.DPS.InfDPS.interm.xNome"), LimiteNomeEndereco),
+            Helper.CortarComReticencias(DanfeFallback.OrDash(Helper.BuildEndereco(intermediario.end), warnings, "Endereço Intermediário", "infNFSe.DPS.InfDPS.interm.end"), LimiteNomeEndereco),
             ResolveMunicipioComUf(intermediario.end, warnings, "infNFSe.DPS.InfDPS.interm.end"),
-            ResolveCepOuCEndPost(intermediario.end),
+            ResolveCodigoIbgeCep(intermediario.end),
             DanfeFallback.OrDash(intermediario.email));
     }
 
@@ -518,39 +555,69 @@ public sealed class DanfeHtmlRenderer
         if (end?.endNac != null)
             return ResolveMunicipioNomeComUf(end.endNac.cMun, warnings, path + ".endNac.cMun");
         if (end?.endExt != null)
-            return DanfeFallback.OrDash($"{end.endExt.xCidade} - {end.endExt.xEstProvReg}", warnings, "Cidade/Estado exterior", path + ".endExt");
+        {
+            // Exterior: cidade / estado, província ou região, como informados.
+            if (string.IsNullOrWhiteSpace(end.endExt.xCidade) && string.IsNullOrWhiteSpace(end.endExt.xEstProvReg))
+                warnings.FieldMissing("Cidade/Estado exterior", path + ".endExt", "-");
+            return FormatarMunicipioUf(end.endExt.xCidade, end.endExt.xEstProvReg);
+        }
         warnings.FieldMissing("endNac/endExt", path, "-");
         return "-";
     }
 
-    private static string ResolveCepOuCEndPost(EndSimples? end)
+    // NT-008 v1.02: "Código IBGE / CEP". Nacional: cMun / CEP formatado. Exterior: sem código IBGE e com o código
+    // postal (cEndPost) como veio — nunca passa pelo FormatCep, que só entende CEP brasileiro.
+    private static string ResolveCodigoIbgeCep(EndSimples? end)
     {
         if (end?.endNac != null)
-            return Helper.FormatCep(end.endNac.CEP);
+            return FormatarCodigoIbgeCep(end.endNac.cMun == 0 ? null : end.endNac.cMun.ToString(CultureInfo.InvariantCulture), end.endNac.CEP);
         if (end?.endExt != null)
-            return DanfeFallback.OrDash(end.endExt.cEndPost);
-        return "-";
+            return "- / " + DanfeFallback.OrDash(end.endExt.cEndPost);
+        return FormatarCodigoIbgeCep(null, null);
     }
 
+    // NT-008 v1.02: "Município / Sigla UF" no formato "{nome} / {uf}"; a parte vazia sai "-" e, vazias as duas, só "-".
+    private static string FormatarMunicipioUf(string? nome, string? uf)
+    {
+        if (string.IsNullOrWhiteSpace(nome) && string.IsNullOrWhiteSpace(uf)) return "-";
+        return $"{DanfeFallback.OrDash(nome)} / {DanfeFallback.OrDash(uf)}";
+    }
+
+    // NT-008 v1.02: "Código IBGE / CEP" no formato "{código} / {CEP 00.000-000}"; a parte vazia sai "-".
+    private static string FormatarCodigoIbgeCep(string? codigoIbge, string? cep) =>
+        $"{DanfeFallback.OrDash(codigoIbge)} / {Helper.FormatCep(cep)}";
+
     private static string BuildTribMunicipalBloco(
-        InfDPS infDps, ValoresNfse? valores, MunicipiosIbge.Municipio? municpioISSQN,
-        int? tpRetIssqn, decimal? vAliqAplic, decimal? vIssqn, decimal vServico, CultureInfo ptBR, DanfeWarningCollector warnings)
+        InfDPS infDps, InfNFSe inf, ValoresNfse? valores, MunicipiosIbge.Municipio? municpioISSQN,
+        int? tpRetIssqn, decimal? vAliqAplic, decimal? vIssqn, CultureInfo ptBR, DanfeWarningCollector warnings)
     {
         var tribMun = infDps.valores?.trib?.tribMun;
 
         var issTributacao = HtmlHelperEncode(GetDescricaoTributacao(tribMun?.tribISSQN));
-        var issPais = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.cPaisResult, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.valores.trib.tribMun.cPaisResult"));
-        var issMunInc = HtmlHelperEncode(DanfeFallback.OrDash(municpioISSQN?.NomeComUf, warnings, "Município Incidência", "MunicipiosIbge.GetMunicipio(cLocIncid).NomeComUf"));
+        // NT-008 v1.02 (4.13.4): campo único "Município / Sigla UF / País de Incidência do ISSQN". O nome vem de
+        // xLocIncid da NFS-e (senão da tabela do IBGE), a UF da tabela e o país de cPaisResult.
+        var pais = DanfeFallback.OrDash(tribMun?.cPaisResult, warnings, "País Resultado da Prestação do Serviço", "infNFSe.DPS.InfDPS.valores.trib.tribMun.cPaisResult");
+        var nomeIncidencia = !string.IsNullOrWhiteSpace(inf.xLocIncid) ? inf.xLocIncid!.Trim() : municpioISSQN?.Nome;
+        var issIncidencia = HtmlHelperEncode($"{DanfeFallback.OrDash(nomeIncidencia)} / {DanfeFallback.OrDash(municpioISSQN?.Uf)} / {pais}");
         var issRegime = HtmlHelperEncode(GetDescricaoRegimeEspecial(infDps.prest?.regTrib?.regEspTrib));
         var issOperacao = HtmlHelperEncode(GetDescricaoTipoImunidade(tribMun?.tpImunidade));
         var issSuspensao = HtmlHelperEncode(GetDescricaoTipoSuspensaoISSQN(tribMun?.exigSusp?.tpSusp));
         var issProcesso = HtmlHelperEncode(DanfeFallback.OrDash(tribMun?.exigSusp?.nProcesso, warnings, "Número Processo Suspensão", "infNFSe.DPS.InfDPS.valores.trib.tribMun.exigSusp.nProcesso"));
         var issBeneficio = HtmlHelperEncode(DanfeFallback.OrDash(valores?.tpBM, warnings, "Benefício Municipal", "infNFSe.valores.tpBM"));
         var issDescIncond = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDescCondIncond?.vDescIncond, ptBR, warnings, "vDescIncond", "infNFSe.valores.vDescCondIncond.vDescIncond"));
-        var issDeducoes = HtmlHelperEncode(DanfeFallback.OrCurrency(infDps.valores?.vDedRed?.vDR, ptBR, warnings, "vDR", "infNFSe.valores.vDedRed.vDR"));
+        // NT-008 v1.02 (4.13.3): Total Deduções/Reduções = (vDR da DPS, senão vCalcDR da NFS-e) + vCalcReeRepRes; ausente = 0
+        // na soma, e só quando as três parcelas faltam o campo sai "-".
+        var vDR = infDps.valores?.vDedRed?.vDR;
+        var vCalcDR = valores?.vCalcDR;
+        var vCalcReeRepRes = inf.IBSCBS?.valores?.vCalcReeRepRes;
+        var parcelaDeducao = vDR ?? vCalcDR;
+        var issDeducoes = HtmlHelperEncode(parcelaDeducao.HasValue || vCalcReeRepRes.HasValue
+            ? ((parcelaDeducao ?? 0M) + (vCalcReeRepRes ?? 0M)).ToString("C", ptBR)
+            : "-");
         // NT-008 v1.02 (4.9.4): tpBM já vem descrito pelo ADN; Cálculo do BM = vCalcBM ou, na falta, vRedBCBM da DPS.
         var issCalculo = HtmlHelperEncode(DanfeFallback.OrCurrency(valores?.vCalcBM ?? tribMun?.BM?.vRedBCBM, ptBR, warnings, "vCalcBM/vRedBCBM", "infNFSe.valores.vCalcBM | infNFSe.DPS.InfDPS.valores.trib.tribMun.BM.vRedBCBM"));
-        var issBc = HtmlHelperEncode(vServico.ToString("C", ptBR));
+        // NT-008 v1.02 (4.13.2): BC ISSQN reproduz infNFSe/valores/vBC, sem recomposição.
+        var issBc = HtmlHelperEncode(DanfeFallback.OrCurrency(valores?.vBC, ptBR, warnings, "vBC", "infNFSe.valores.vBC"));
         var issAliq = HtmlHelperEncode(DanfeFallback.OrPercent(vAliqAplic, ptBR, warnings, "pAliqAplic", "infNFSe.valores.pAliqAplic"));
         var issRetencao = HtmlHelperEncode(GetDescricaoRetencao(tpRetIssqn));
         var issApurado = HtmlHelperEncode(DanfeFallback.OrCurrency(vIssqn, ptBR, warnings, "vISSQN", "infNFSe.valores.vISSQN"));
@@ -562,8 +629,7 @@ public sealed class DanfeHtmlRenderer
               <table style=""width: 100%; border-collapse: collapse"">
                 <tr>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Tipo de Tributação do ISSQN</span><br />{issTributacao}</td>
-                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">País Resultado da Prestação do Serviço</span><br />{issPais}</td>
-                  <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Município de Incidência do ISSQN</span><br />{issMunInc}</td>
+                  <td style=""vertical-align: top; width: 50%""><span class=""label"" style=""font-weight: bold"">Município / Sigla UF / País de Incidência do ISSQN</span><br />{issIncidencia}</td>
                   <td style=""vertical-align: top; width: 25%""><span class=""label"" style=""font-weight: bold"">Regime Especial de Tributação</span><br />{issRegime}</td>
                 </tr>
               </table>
@@ -737,8 +803,9 @@ public sealed class DanfeHtmlRenderer
 
     private static string FormatTresPercentuais(decimal? a, decimal? b, decimal? c, CultureInfo ptBR)
     {
-        if (!a.HasValue && !b.HasValue && !c.HasValue) return "-";
-        return $"{a?.ToString("N2", ptBR) ?? "-"}% / {b?.ToString("N2", ptBR) ?? "-"}% / {c?.ToString("N2", ptBR) ?? "-"}%";
+        // NT-008 v1.02 (4.14): cada componente ausente sai "-" (sem "%"); sem nenhum, "- / - / -".
+        static string Componente(decimal? valor, CultureInfo ptBR) => valor.HasValue ? $"{valor.Value.ToString("N2", ptBR)}%" : "-";
+        return $"{Componente(a, ptBR)} / {Componente(b, ptBR)} / {Componente(c, ptBR)}";
     }
 
     private static string HtmlHelperEncode(string value) => Helper.HtmlEncode(value);
@@ -777,11 +844,12 @@ public sealed class DanfeHtmlRenderer
         if (!string.IsNullOrWhiteSpace(infDps.serv?.infoCompl?.docRef))
             segmentos.Add($"<b>Doc. Ref.:</b> {Helper.HtmlEncode(infDps.serv!.infoCompl!.docRef!)}");
 
-        if (infDps.serv?.obra != null)
-            segmentos.Add($"<b>Cod. Obra:</b> {Helper.HtmlEncode(infDps.serv.obra.cObra ?? "-")}");
+        // NT-008 v1.02 (4.14): obra/imóvel só imprimem o trecho quando o código/inscrição está informado.
+        if (!string.IsNullOrWhiteSpace(infDps.serv?.obra?.cObra))
+            segmentos.Add($"<b>Cod. Obra:</b> {Helper.HtmlEncode(infDps.serv!.obra!.cObra!)}");
 
-        if (infDps.IBSCBS?.imovel != null)
-            segmentos.Add($"<b>Insc. Imob.:</b> {Helper.HtmlEncode(infDps.IBSCBS.imovel.inscImobFisc ?? "-")}");
+        if (!string.IsNullOrWhiteSpace(infDps.IBSCBS?.imovel?.inscImobFisc))
+            segmentos.Add($"<b>Insc. Imob.:</b> {Helper.HtmlEncode(infDps.IBSCBS!.imovel!.inscImobFisc!)}");
 
         if (infDps.serv?.atvEvento != null)
             segmentos.Add($"<b>Cod. Evt.:</b> {Helper.HtmlEncode(infDps.serv.atvEvento.idAtvEvt ?? "-")}");
@@ -829,7 +897,8 @@ public sealed class DanfeHtmlRenderer
         return $"<b>Totais Aproximados dos Tributos cfe. Lei nº 12.741/2012:</b> Federais: {fed}; Estaduais: {est}; Municipais: {mun}";
     }
 
-    // Helper local: resolve município do tomador sem explodir e com warning
+    // Helper local: resolve o município de um participante sem explodir e com warning. O formato "Nome / UF" é
+    // montado aqui (NomeComUf é API pública e continua "Nome - UF").
     private static string ResolveMunicipioNomeComUf(int? cMun, DanfeWarningCollector warnings, string path)
     {
         if (!cMun.HasValue)
@@ -838,14 +907,8 @@ public sealed class DanfeHtmlRenderer
             return "-";
         }
 
-        var mun = MunicipiosIbge.GetMunicipio(cMun.Value);
-        if (mun == null)
-        {
-            warnings.MunicipioNotFound(path);
-            return "-";
-        }
-
-        return DanfeFallback.OrDash(mun.NomeComUf, warnings, "NomeComUf", path);
+        var mun = ObterMunicipio(cMun.Value.ToString(CultureInfo.InvariantCulture), path, warnings);
+        return FormatarMunicipioUf(mun?.Nome, mun?.Uf);
     }
 
     private static string GetDescricaoRetencao(int? tpRetISSQN)
@@ -892,7 +955,7 @@ public sealed class DanfeHtmlRenderer
             case 4:
                 return "Não Incidência";
             default:
-                return "";
+                return "-";
         }
     }
 
@@ -913,38 +976,36 @@ public sealed class DanfeHtmlRenderer
 
     private static string GetDescricaoPrestadorSimples(int? opSimpNac)
     {
-        switch (opSimpNac)
+        // NT-008 v1.02 (4.9.5): textos do Anexo I (Restrições globais), cortados em 37 caracteres + "..." (tamanho do campo).
+        var descricao = opSimpNac switch
         {
-            case 1:
-                return "Não Optante";
-            case 2:
-                return "Optante - Microempreendedor Individual(MEI)";
-            case 3:
-                return "Optante - Microempresa ou Empresa de Pequeno Porte (ME/EPP)";
-            default:
-                return "-";
-        }
+            1 => "Não Optante",
+            2 => "Optante - Microempreendedor Individual (MEI)",
+            3 => "Optante - Microempresa ou Empresa de Pequeno Porte (ME/EPP)",
+            _ => null,
+        };
+
+        return descricao == null ? "-" : Helper.CortarComReticencias(descricao, 37);
     }
+
     private static string GetDescricaoRegimeSimples(int? regApTribSN)
     {
-        /*
-          Opção para que o contribuinte optante pelo Simples Nacional ME/EPP (opSimpNac = 3) possa indicar, ao emitir o documento fiscal, em qual regime de apuração os tributos federais e municipal estão inseridos, caso tenha ultrapassado algum sublimite ou limite definido para o Simples Nacional.
-            1 – Regime de apuração dos tributos federais e municipal pelo SN;
-            2 – Regime de apuração dos tributos federais pelo SN e ISSQN  por fora do SN conforme respectiva legislação municipal do tributo;
-            3 – Regime de apuração dos tributos federais e municipal por fora do SN conforme respectivas legilações federal e municipal de cada tributo;
-         */
-        switch (regApTribSN)
+        // NT-008 v1.02 (4.9.5): textos do Anexo I (Restrições globais), cortados em 77 caracteres + "..." (tamanho do campo).
+        // Os códigos 2 e 3 já estão na forma cortada da análise do Anexo I (77 caracteres + "..."), guardada literalmente;
+        // o corte é idempotente sobre eles.
+        // Opção para o optante pelo Simples Nacional ME/EPP (opSimpNac = 3) indicar em qual regime de apuração os tributos
+        // federais e municipal estão inseridos, caso tenha ultrapassado algum sublimite ou limite do Simples Nacional.
+        var descricao = regApTribSN switch
         {
-            case 1:
-                return "Regime de apuração dos tributos federais e municipal pelo Simples Nacional";
-            case 2:
-                return "Regime de apuração dos tributos federais pelo SN e ISSQN  por fora do SN conforme respectiva legislação municipal do tributo";
-            case 3:
-                return "Regime de apuração dos tributos federais e municipal por fora do SN conforme respectivas legilações federal e municipal de cada tributo";
-            default:
-                return "-";
-        }
+            1 => "Regime de apuração dos tributos federais e municipal pelo SN",
+            2 => "Regime de apuração dos tributos federais pelo SN e o ISSQN pela NFS-e conform...",
+            3 => "Regime de apuração dos tributos federais e municipal pela NFS-e conforme resp...",
+            _ => null,
+        };
+
+        return descricao == null ? "-" : Helper.CortarComReticencias(descricao, 77);
     }
+
     private static string GetDescricaoRegimeEspecial(int? regEspTrib)
     {
         /*
@@ -992,23 +1053,20 @@ public sealed class DanfeHtmlRenderer
             4 - Livros, jornais, periódicos e o papel destinado a sua impressão (CF88, Art 150, VI, d);
             5 - Fonogramas e videofonogramas musicais produzidos no Brasil contendo obras musicais ou literomusicais de autores brasileiros e/ou obras em geral interpretadas por artistas brasileiros bem como os suportes materiais ou arquivos digitais que os contenham, salvo na etapa de replicação industrial de mídias ópticas de leitura a laser.   (CF88, Art 150, VI, e);
          */
-        switch (tpImunidade)
+        // NT-008 v1.02 (4.9.6): textos do Anexo I (Restrições globais) para o código informado, cortados em 37 caracteres + "...".
+        // O texto completo aparece no comentário acima; sem código ou fora da tabela, "-".
+        var descricao = tpImunidade switch
         {
-            case 0:
-                return "Nenhum";
-            case 1:
-                return "Patrimônio, renda ou serviços, uns dos outros";
-            case 2:
-                return "Entidades religiosas e templos de qualquer culto";
-            case 3:
-                return "Patrimônio, renda ou serviços dos partidos políticos";
-            case 4:
-                return "Livros, jornais, periódicos e o papel destinado a sua impressão";
-            case 5:
-                return "Fonogramas e videofonogramas musicais produzidos no Brasil";
-            default:
-                return "-";
-        }
+            0 => "Imunidade (tipo não informado na nota de origem)",
+            1 => "Patrimônio, renda ou serviços, uns dos outros (CF88, Art 150, VI, a)",
+            2 => "Entidades religiosas e templos de qualquer culto, inclusive suas organizações assistenciais e beneficentes (CF88, Art 150, VI, b)",
+            3 => "Patrimônio, renda ou serviços dos partidos políticos, inclusive suas fundações, das entidades sindicais dos trabalhadores, das instituições de educação e de assistência social, sem fins lucrativos, atendidos os requisitos da lei (CF88, Art 150, VI, c)",
+            4 => "Livros, jornais, periódicos e o papel destinado a sua impressão (CF88, Art 150, VI, d)",
+            5 => "Fonogramas e videofonogramas musicais produzidos no Brasil contendo obras musicais ou literomusicais de autores brasileiros e/ou obras em geral interpretadas por artistas brasileiros bem como os suportes materiais ou arquivos digitais que os contenham, salvo na etapa de replicação industrial de mídias ópticas de leitura a laser. (CF88, Art 150, VI, e)",
+            _ => null,
+        };
+
+        return descricao == null ? "-" : Helper.CortarComReticencias(descricao, 37);
     }
 
     private static string GetDescricaoTipoSuspensaoISSQN(int? tpSusp)
@@ -1019,17 +1077,16 @@ public sealed class DanfeHtmlRenderer
             1 - Exigibilidade do ISSQN Suspensa por Decisão Judicial;
             2 - Exigibilidade do ISSQN Suspensa por Processo Administrativo;
          */
-        switch (tpSusp)
+        // NT-008 v1.02 (4.9.6): textos do Anexo I (Restrições globais), cortados em 37 caracteres + "...";
+        // outro valor (inclusive 0) ou ausente, "-".
+        var descricao = tpSusp switch
         {
-            case 0:
-                return "Não";
-            case 1:
-                return "Suspensa por Decisão Judicial";
-            case 2:
-                return "Suspensa por Processo Administrativo";
-            default:
-                return "-";
-        }
+            1 => "Exigibilidade Suspensa por Decisão Judicial",
+            2 => "Exigibilidade Suspensa por Processo Administrativo",
+            _ => null,
+        };
+
+        return descricao == null ? "-" : Helper.CortarComReticencias(descricao, 37);
     }
 
     // NT-008 v1.02 (4.9.2): descrição do cStat do XML, até 37 caracteres. Cancelada/substituída é indicada só

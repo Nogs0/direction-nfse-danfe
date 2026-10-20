@@ -338,10 +338,13 @@ namespace Direction.NFSe.Danfe
     public class VDedRed
     {
         public decimal pDR { get; set; }
-        public decimal vDR { get; set; }
+        public decimal? vDR { get; set; }
 
         [XmlArray("documentos")]
         public List<Documento>? documentos { get; set; }
+
+        // ShouldSerialize para DECIMAL?
+        public bool ShouldSerializevDR() => vDR.HasValue;
 
         public bool ShouldSerializedocumentos()
         {
